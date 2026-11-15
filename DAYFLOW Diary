@@ -1,0 +1,347 @@
+
+package com.supermenpark.dayflowdiary
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.os.Bundle
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.widget.*
+import org.json.JSONArray
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+class MainActivity : Activity() {
+
+    private val prefs by lazy {
+        getSharedPreferences("my_diary", MODE_PRIVATE)
+    }
+
+    private val entries = mutableListOf<DiaryEntry>()
+
+    private lateinit var root: LinearLayout
+    private lateinit var titleInput: EditText
+    private lateinit var bodyInput: EditText
+    private lateinit var dateText: TextView
+
+    private var selectedId: Long? = null
+
+    private val paper = Color.rgb(255, 253, 246)
+    private val background = Color.rgb(244, 240, 229)
+    private val ink = Color.rgb(65, 61, 53)
+    private val accent = Color.rgb(117, 125, 91)
+
+    data class DiaryEntry(
+        val id: Long,
+        val date: String,
+        val title: String,
+        val body: String
+    )
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        loadEntries()
+        showScreen()
+    }
+
+    private fun showScreen() {
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(background)
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(22), dp(20), dp(22), dp(15))
+        }
+
+        val logo = TextView(this).apply {
+            text = "나의 하루"
+            textSize = 25f
+            setTextColor(ink)
+            typeface = Typeface.create(
+                "serif", Typeface.BOLD
+            )
+        }
+
+        header.addView(
+            logo,
+            LinearLayout.LayoutParams(0, -2, 1f)
+        )
+
+        val history = TextView(this).apply {
+            text = "기록 보기"
+            textSize = 14f
+            setTextColor(accent)
+            setPadding(dp(12), dp(10), dp(4), dp(10))
+            setOnClickListener { showHistory() }
+        }
+
+        header.addView(history)
+        root.addView(header)
+
+        val scroll = ScrollView(this)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(17), dp(10), dp(17), dp(25))
+        }
+
+        scroll.addView(content)
+
+        root.addView(
+            scroll,
+            LinearLayout.LayoutParams( -1, 0, 1f)
+        )
+
+        setContentView(root)
+
+        buildDiary(content)
+    }
+
+    private fun buildDiary(
+        content: LinearLayout,
+        entry: DiaryEntry? = null
+    ) {
+        content.removeAllViews()
+        selectedId = entry?.id
+
+        val sheet = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(23), dp(25), dp(23), dp(25))
+            background = rounded(paper, 8)
+            elevation = dp(2).toFloat()
+        }
+
+        content.addView(
+            sheet,
+            LinearLayout.LayoutParams(-1, -2)
+        )
+
+        val smallTitle = TextView(this).apply {
+            text = "TODAY'S DIARY"
+            textSize = 11f
+            letterSpacing = 0.15f
+            setTextColor(accent)
+        }
+
+        sheet.addView(smallTitle)
+
+        dateText = TextView(this).apply {
+            text = entry?.date ?: today()
+            textSize = 14f
+            setTextColor(Color.GRAY)
+            setPadding(0, dp(15), 0, dp(20))
+        }
+
+        sheet.addView(dateText)
+
+        titleInput = EditText(this).apply {
+            hint = "오늘의 제목을 적어보세요"
+            setText(entry?.title ?: "")
+            textSize = 23f
+            setTextColor(ink)
+            setHintTextColor(Color.LTGRAY)
+            typeface = Typeface.create(
+                "serif", Typeface.BOLD
+            )
+            background = null
+            setSingleLine(true)
+            setPadding(0, dp(8), 0, dp(15))
+        }
+
+        sheet.addView(titleInput)
+
+        val divider = android.view.View(this).apply {
+            setBackgroundColor(Color.rgb(225, 220, 207))
+        }
+
+        sheet.addView(
+            divider,
+            LinearLayout.LayoutParams(-1, dp(1))
+        )
+
+        bodyInput = EditText(this).apply {
+            hint = "오늘 있었던 일들을 자유롭게 적어보세요.\n\n기억하고 싶은 순간도 좋고,\n마음속에 담아둔 이야기도 좋습니다.\n\n이곳은 나만의 작은 기록 공간입니다."
+            setText(entry?.body ?: "")
+            textSize = 17f
+            setTextColor(ink)
+            setHintTextColor(Color.rgb(174, 168, 153))
+            gravity = Gravity.TOP
+            minLines = 15
+            background = null
+            setPadding(0, dp(20), 0, dp(15))
+            setLineSpacing(dp(5).toFloat(), 1f)
+        }
+
+        sheet.addView(bodyInput)
+
+        val save = Button(this).apply {
+            text = "기록 저장하기"
+            isAllCaps = false
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            background = rounded(accent, 10)
+            setOnClickListener { saveDiary() }
+        }
+
+        sheet.addView(
+            save,
+            LinearLayout.LayoutParams(-1, dp(52))
+        )
+
+        val newDiary = TextView(this).apply {
+            text = "+ 새 일기 쓰기"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(accent)
+            setPadding(dp(10), dp(22), dp(10), dp(15))
+            setOnClickListener {
+                buildDiary(content)
+            }
+        }
+
+        content.addView(newDiary)
+    }
+
+    private fun saveDiary() {
+        val title = titleInput.text.toString().trim()
+        val body = bodyInput.text.toString().trim()
+
+        if (title.isEmpty() && body.isEmpty()) {
+            Toast.makeText(
+                this,
+                "내용을 입력해 주세요.",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        val id = selectedId ?: System.currentTimeMillis()
+
+        val entry = DiaryEntry(
+            id,
+            dateText.text.toString(),
+            title,
+            body
+        )
+
+        val index = entries.indexOfFirst { it.id == id }
+
+        if (index >= 0) {
+            entries[index] = entry
+        } else {
+            entries.add(0, entry)
+        }
+
+        persistEntries()
+
+        selectedId = id
+
+        Toast.makeText(
+            this,
+            "일기가 저장되었습니다.",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun showHistory() {
+        if (entries.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setMessage("아직 작성한 일기가 없습니다.")
+                .setPositiveButton("확인", null)
+                .show()
+            return
+        }
+
+        val labels = entries.map {
+            val name = if (it.title.isBlank()) {
+                "제목 없는 일기"
+            } else {
+                it.title
+            }
+            "${it.date}  ·  $name"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("나의 일기")
+            .setItems(labels) { _, which ->
+                val scroll = root.getChildAt(1) as ScrollView
+                val content = scroll.getChildAt(0) as LinearLayout
+                buildDiary(content, entries[which])
+            }
+            .setNegativeButton("닫기", null)
+            .show()
+    }
+
+    private fun loadEntries() {
+        entries.clear()
+
+        try {
+            val data = JSONArray(
+                prefs.getString("entries", "[]")
+            )
+
+            for (i in 0 until data.length()) {
+                val item = data.getJSONObject(i)
+
+                entries.add(
+                    DiaryEntry(
+                        item.getLong("id"),
+                        item.getString("date"),
+                        item.getString("title"),
+                        item.getString("body")
+                    )
+                )
+            }
+        } catch (_: Exception) {
+            entries.clear()
+        }
+    }
+
+    private fun persistEntries() {
+        val array = JSONArray()
+
+        entries.forEach {
+            array.put(
+                JSONObject().apply {
+                    put("id", it.id)
+                    put("date", it.date)
+                    put("title", it.title)
+                    put("body", it.body)
+                }
+            )
+        }
+
+        prefs.edit()
+            .putString("entries", array.toString())
+            .apply()
+    }
+
+    private fun today(): String {
+        return SimpleDateFormat(
+            "yyyy년 M월 d일 E요일",
+            Locale.KOREAN
+        ).format(Date())
+    }
+
+    private fun rounded(
+        color: Int,
+        radius: Int
+    ): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+        }
+    }
+
+    private fun dp(value: Int): Int {
+        return (
+            value * resources.displayMetrics.density
+        ).toInt()
+    }
+}
