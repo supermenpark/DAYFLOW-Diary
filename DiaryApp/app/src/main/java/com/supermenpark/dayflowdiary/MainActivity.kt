@@ -1,23 +1,24 @@
 
 package com.supermenpark.dayflowdiary
-import android.graphics.BitmapFactory
-import android.view.View
-import android.widget.FrameLayout
-import java.net.URL
-import java.util.Random
+
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.View
 import android.widget.*
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.random.Random
 
 class MainActivity : Activity() {
 
@@ -57,10 +58,10 @@ class MainActivity : Activity() {
     private fun showScreen() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-          setBackgroundColor(this@MainActivity.pageBackground)
+            setBackgroundColor(pageBackground)
         }
 
-        
+        // 상단 사진 배너
         val header = FrameLayout(this).apply {
             background = rounded(Color.rgb(115, 125, 104), 14)
             clipToOutline = true
@@ -126,28 +127,7 @@ class MainActivity : Activity() {
 
         loadDailyBanner(bannerImage)
 
-            text = "나의 하루"
-            textSize = 25f
-            setTextColor(ink)
-            typeface = Typeface.create("serif", Typeface.BOLD)
-        }
-
-        header.addView(
-            logo,
-            LinearLayout.LayoutParams(0, -2, 1f)
-        )
-
-        val history = TextView(this).apply {
-            text = "기록 보기"
-            textSize = 14f
-            setTextColor(accent)
-            setPadding(dp(12), dp(10), dp(4), dp(10))
-            setOnClickListener { showHistory() }
-        }
-
-        header.addView(history)
-        root.addView(header)
-
+        // 화면 메뉴
         val menu = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -167,12 +147,10 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setPadding(dp(10), dp(12), dp(10), dp(12))
                 setTextColor(
-                    if (currentMode == index) Color.WHITE
-                    else accent
+                    if (currentMode == index) Color.WHITE else accent
                 )
                 background = rounded(
-                    if (currentMode == index) accent
-                    else paper,
+                    if (currentMode == index) accent else paper,
                     12
                 )
                 setOnClickListener {
@@ -181,9 +159,7 @@ class MainActivity : Activity() {
                 }
             }
 
-            val params = LinearLayout.LayoutParams(
-                0, dp(43), 1f
-            )
+            val params = LinearLayout.LayoutParams(0, dp(43), 1f)
             params.setMargins(dp(3), 0, dp(3), 0)
             menu.addView(button, params)
         }
@@ -211,6 +187,75 @@ class MainActivity : Activity() {
             1 -> buildMemoCollection(content, false)
             2 -> buildMemoCollection(content, true)
         }
+    }
+
+    // 날짜별로 사진을 하나 선택하고 그날은 같은 사진 유지
+    private fun loadDailyBanner(target: ImageView) {
+
+        val imageUrls = listOf(
+            "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200&auto=format&fit=crop"
+        )
+
+        val todayKey = SimpleDateFormat(
+            "yyyyMMdd",
+            Locale.US
+        ).format(Date())
+
+        val savedDate = prefs.getString("banner_date", "")
+
+        val imageIndex = if (savedDate == todayKey) {
+            prefs.getInt("banner_index", 0)
+                .coerceIn(imageUrls.indices)
+        } else {
+            val previous = prefs.getInt("banner_index", -1)
+            var next = Random.nextInt(imageUrls.size)
+
+            if (imageUrls.size > 1 && next == previous) {
+                next = (next + 1) % imageUrls.size
+            }
+
+            prefs.edit()
+                .putString("banner_date", todayKey)
+                .putInt("banner_index", next)
+                .apply()
+
+            next
+        }
+
+        Thread {
+            var connection: HttpURLConnection? = null
+
+            try {
+                connection = URL(imageUrls[imageIndex])
+                    .openConnection() as HttpURLConnection
+
+                connection.connectTimeout = 10000
+                connection.readTimeout = 15000
+                connection.requestMethod = "GET"
+                connection.connect()
+
+                val bitmap = connection.inputStream.use {
+                    BitmapFactory.decodeStream(it)
+                }
+
+                if (bitmap != null) {
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) {
+                            target.setImageBitmap(bitmap)
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // 사진을 불러오지 못하면 기본 배경 유지
+            } finally {
+                connection?.disconnect()
+            }
+        }.start()
     }
 
     private fun buildDiary(
@@ -264,7 +309,7 @@ class MainActivity : Activity() {
 
         sheet.addView(titleInput)
 
-        val divider = android.view.View(this).apply {
+        val divider = View(this).apply {
             setBackgroundColor(Color.rgb(225, 220, 207))
         }
 
@@ -430,9 +475,7 @@ class MainActivity : Activity() {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.TOP
-                setPadding(
-                    dp(17), dp(20), dp(17), dp(17)
-                )
+                setPadding(dp(17), dp(20), dp(17), dp(17))
 
                 val cardColor = if (sticky) {
                     when (index % 4) {
@@ -469,9 +512,7 @@ class MainActivity : Activity() {
             val title = TextView(this).apply {
                 text = entry.title.ifBlank { "제목 없는 일기" }
                 textSize = if (sticky) 16f else 19f
-                typeface = Typeface.create(
-                    "serif", Typeface.BOLD
-                )
+                typeface = Typeface.create("serif", Typeface.BOLD)
                 setTextColor(ink)
                 setPadding(0, dp(13), 0, dp(12))
                 maxLines = 2
@@ -505,10 +546,7 @@ class MainActivity : Activity() {
                 dp(width), dp(height)
             )
 
-            params.setMargins(
-                dp(5), dp(5), dp(12), dp(10)
-            )
-
+            params.setMargins(dp(5), dp(5), dp(12), dp(10))
             row.addView(card, params)
         }
 
