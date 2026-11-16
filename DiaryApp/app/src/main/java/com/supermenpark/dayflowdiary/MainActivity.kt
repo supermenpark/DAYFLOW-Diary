@@ -60,13 +60,72 @@ class MainActivity : Activity() {
           setBackgroundColor(this@MainActivity.pageBackground)
         }
 
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(22), dp(20), dp(22), dp(15))
+        
+        val header = FrameLayout(this).apply {
+            background = rounded(Color.rgb(115, 125, 104), 14)
+            clipToOutline = true
         }
 
+        val bannerImage = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(Color.rgb(115, 125, 104))
+        }
+
+        header.addView(
+            bannerImage,
+            FrameLayout.LayoutParams(-1, -1)
+        )
+
+        val shade = View(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.BOTTOM_TOP,
+                intArrayOf(
+                    0x99000000.toInt(),
+                    0x22000000,
+                    0x44000000
+                )
+            )
+        }
+
+        header.addView(
+            shade,
+            FrameLayout.LayoutParams(-1, -1)
+        )
+
         val logo = TextView(this).apply {
+            text = "나의 하루"
+            textSize = 27f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("serif", Typeface.BOLD)
+            shadowLayer(5f, 0f, 2f, Color.BLACK)
+        }
+
+        val logoParams = FrameLayout.LayoutParams(
+            -2, -2, Gravity.BOTTOM or Gravity.START
+        )
+        logoParams.setMargins(dp(20), 0, dp(12), dp(19))
+        header.addView(logo, logoParams)
+
+        val history = TextView(this).apply {
+            text = "기록 보기  ›"
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setPadding(dp(12), dp(9), dp(5), dp(9))
+            setOnClickListener { showHistory() }
+        }
+
+        val historyParams = FrameLayout.LayoutParams(
+            -2, -2, Gravity.TOP or Gravity.END
+        )
+        historyParams.setMargins(0, dp(10), dp(13), 0)
+        header.addView(history, historyParams)
+
+        val headerParams = LinearLayout.LayoutParams(-1, dp(165))
+        headerParams.setMargins(dp(14), dp(12), dp(14), dp(12))
+        root.addView(header, headerParams)
+
+        loadDailyBanner(bannerImage)
+
             text = "나의 하루"
             textSize = 25f
             setTextColor(ink)
