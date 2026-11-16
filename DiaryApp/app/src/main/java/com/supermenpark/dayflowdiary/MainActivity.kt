@@ -33,7 +33,7 @@ class MainActivity : Activity() {
     private var currentMode = 0
 
     private val paper = Color.rgb(255, 253, 246)
-    private val background = Color.rgb(244, 240, 229)
+    private val pageBackground = Color.rgb(244, 240, 229)
     private val ink = Color.rgb(65, 61, 53)
     private val accent = Color.rgb(117, 125, 91)
 
@@ -53,7 +53,7 @@ class MainActivity : Activity() {
     private fun showScreen() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(background)
+          setBackgroundColor(pageBackground)  
         }
 
         val header = LinearLayout(this).apply {
