@@ -1,6 +1,10 @@
 
 package com.supermenpark.dayflowdiary
-
+import android.graphics.BitmapFactory
+import android.view.View
+import android.widget.FrameLayout
+import java.net.URL
+import java.util.Random
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
