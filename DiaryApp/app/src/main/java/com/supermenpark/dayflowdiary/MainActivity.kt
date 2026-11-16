@@ -3,12 +3,11 @@ package com.supermenpark.dayflowdiary
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.os.Bundle
 import android.view.Gravity
-import android.view.View
 import android.widget.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -19,339 +18,538 @@ import java.util.Locale
 class MainActivity : Activity() {
 
     private val prefs by lazy {
-        getSharedPreferences("diary_data", MODE_PRIVATE)
+        getSharedPreferences("my_diary", MODE_PRIVATE)
     }
 
-    private val paper = Color.rgb(247, 243, 234)
-    private val ink = Color.rgb(62, 54, 45)
-    private val muted = Color.rgb(137, 126, 111)
-    private val brown = Color.rgb(139, 105, 76)
+    private val entries = mutableListOf<DiaryEntry>()
 
+    private lateinit var root: LinearLayout
+    private lateinit var content: LinearLayout
     private lateinit var titleInput: EditText
-    private lateinit var contentInput: EditText
+    private lateinit var bodyInput: EditText
+    private lateinit var dateText: TextView
 
-    private var selectedMood = "평온"
+    private var selectedId: Long? = null
+    private var currentMode = 0
+
+    private val paper = Color.rgb(255, 253, 246)
+    private val background = Color.rgb(244, 240, 229)
+    private val ink = Color.rgb(65, 61, 53)
+    private val accent = Color.rgb(117, 125, 91)
+
+    data class DiaryEntry(
+        val id: Long,
+        val date: String,
+        val title: String,
+        val body: String
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        showDiary()
+        loadEntries()
+        showScreen()
     }
 
-    private fun showDiary() {
-        val scroll = ScrollView(this).apply {
-            setBackgroundColor(paper)
-            isFillViewport = true
-        }
-
-        val root = LinearLayout(this).apply {
+    private fun showScreen() {
+        root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(26), dp(22), dp(32))
+            setBackgroundColor(background)
         }
 
-        scroll.addView(root)
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(22), dp(20), dp(22), dp(15))
+        }
 
-        val top = row()
-        top.addView(
-            label("DAYFLOW", 15, true, brown),
+        val logo = TextView(this).apply {
+            text = "나의 하루"
+            textSize = 25f
+            setTextColor(ink)
+            typeface = Typeface.create("serif", Typeface.BOLD)
+        }
+
+        header.addView(
+            logo,
             LinearLayout.LayoutParams(0, -2, 1f)
         )
-        top.addView(label("D I A R Y", 12, true, muted))
-        root.addView(top)
 
-        space(root, 20)
-
-        root.addView(label("나의 하루를 담는", 16, false, muted))
-        root.addView(label("작은 기록장.", 31, true, ink))
-
-        space(root, 8)
-        root.addView(label(todayString(), 14, true, brown))
-
-        space(root, 20)
-
-        val quote = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(19), dp(20), dp(19))
-            background = rounded(Color.rgb(232, 222, 205), 18)
+        val history = TextView(this).apply {
+            text = "기록 보기"
+            textSize = 14f
+            setTextColor(accent)
+            setPadding(dp(12), dp(10), dp(4), dp(10))
+            setOnClickListener { showHistory() }
         }
 
-        quote.addView(
-            label("TODAY'S NOTE · 오늘의 한마디", 11, true, brown)
-        )
+        header.addView(history)
+        root.addView(header)
 
-        space(quote, 10)
-
-        quote.addView(
-            label(
-                "천천히 가도 괜찮아요.\n오늘의 나도 충분히 애썼으니까요.",
-                18, true, ink
-            )
-        )
-
-        space(quote, 7)
-        quote.addView(
-            label("하루의 작은 순간도 소중하게 기록해요.", 12, false, muted)
-        )
-
-        root.addView(quote)
-
-        space(root, 24)
-
-        root.addView(label("오늘의 기록", 21, true, ink))
-        space(root, 12)
-
-        titleInput = EditText(this).apply {
-            hint = "오늘을 한마디로 표현한다면"
-            textSize = 17f
-            setTextColor(ink)
-            setHintTextColor(Color.LTGRAY)
-            setSingleLine(true)
-            setPadding(dp(16), dp(15), dp(16), dp(15))
-            background = rounded(Color.WHITE, 13)
+        val menu = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(10), dp(5), dp(10), dp(12))
         }
 
-        root.addView(titleInput, matchWidth())
-        space(root, 12)
-
-        contentInput = EditText(this).apply {
-            hint = "오늘 있었던 일, 떠오른 생각,\n마음속 이야기를 편하게 적어보세요.\n\n잘 쓰려고 애쓰지 않아도 괜찮아요.\n있는 그대로의 오늘이면 충분합니다."
-            textSize = 16f
-            setTextColor(ink)
-            setHintTextColor(Color.GRAY)
-            gravity = Gravity.TOP
-            minLines = 9
-            setPadding(dp(17), dp(18), dp(17), dp(18))
-            background = rounded(Color.WHITE, 13)
-        }
-
-        root.addView(
-            contentInput,
-            LinearLayout.LayoutParams(-1, dp(245))
+        val menuNames = listOf(
+            "일기 쓰기",
+            "세로 메모지",
+            "포스트잇 모아보기"
         )
 
-        space(root, 18)
-
-        root.addView(label("오늘의 기분은 어땠나요?", 14, true, ink))
-        space(root, 10)
-
-        val moods = row()
-
-        listOf("평온", "행복", "감사", "피곤", "복잡").forEach { mood ->
-            val chip = TextView(this).apply {
-                text = mood
+        menuNames.forEachIndexed { index, name ->
+            val button = TextView(this).apply {
+                text = name
                 textSize = 12f
                 gravity = Gravity.CENTER
+                setPadding(dp(10), dp(12), dp(10), dp(12))
                 setTextColor(
-                    if (selectedMood == mood) Color.WHITE else brown
+                    if (currentMode == index) Color.WHITE
+                    else accent
                 )
-                setPadding(dp(12), dp(9), dp(12), dp(9))
                 background = rounded(
-                    if (selectedMood == mood) brown else Color.WHITE,
-                    30
+                    if (currentMode == index) accent
+                    else paper,
+                    12
                 )
-
                 setOnClickListener {
-                    selectedMood = mood
-                    showDiary()
+                    currentMode = index
+                    showScreen()
                 }
             }
 
-            val lp = LinearLayout.LayoutParams(0, -2, 1f)
-            lp.marginEnd = dp(5)
-            moods.addView(chip, lp)
+            val params = LinearLayout.LayoutParams(
+                0, dp(43), 1f
+            )
+            params.setMargins(dp(3), 0, dp(3), 0)
+            menu.addView(button, params)
         }
 
-        root.addView(moods)
+        root.addView(menu)
 
-        space(root, 24)
+        val scroll = ScrollView(this)
 
-        root.addView(primaryButton("기록 저장하기") {
-            saveDiary()
-        })
+        content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(17), dp(8), dp(17), dp(30))
+        }
 
-        space(root, 9)
-
-        root.addView(secondaryButton("저장한 일기 모아보기") {
-            showSavedEntries()
-        })
-
-        space(root, 9)
-
-        root.addView(secondaryButton("새 일기 작성") {
-            titleInput.setText("")
-            contentInput.setText("")
-            selectedMood = "평온"
-            showDiary()
-        })
-
-        space(root, 20)
+        scroll.addView(content)
 
         root.addView(
-            label("A LITTLE SPACE FOR YOURSELF", 10, true, muted).apply {
-                gravity = Gravity.CENTER
-            }
+            scroll,
+            LinearLayout.LayoutParams(-1, 0, 1f)
         )
 
-        setContentView(scroll)
+        setContentView(root)
+
+        when (currentMode) {
+            0 -> buildDiary(content)
+            1 -> buildMemoCollection(content, false)
+            2 -> buildMemoCollection(content, true)
+        }
+    }
+
+    private fun buildDiary(
+        target: LinearLayout,
+        entry: DiaryEntry? = null
+    ) {
+        target.removeAllViews()
+        selectedId = entry?.id
+
+        val sheet = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(23), dp(25), dp(23), dp(25))
+            setBackground(rounded(paper, 8))
+            elevation = dp(3).toFloat()
+        }
+
+        target.addView(
+            sheet,
+            LinearLayout.LayoutParams(-1, -2)
+        )
+
+        val smallTitle = TextView(this).apply {
+            text = "TODAY'S DIARY"
+            textSize = 11f
+            letterSpacing = 0.15f
+            setTextColor(accent)
+        }
+
+        sheet.addView(smallTitle)
+
+        dateText = TextView(this).apply {
+            text = entry?.date ?: today()
+            textSize = 14f
+            setTextColor(Color.GRAY)
+            setPadding(0, dp(15), 0, dp(20))
+        }
+
+        sheet.addView(dateText)
+
+        titleInput = EditText(this).apply {
+            hint = "오늘의 제목을 적어보세요"
+            setText(entry?.title ?: "")
+            textSize = 23f
+            setTextColor(ink)
+            setHintTextColor(Color.LTGRAY)
+            typeface = Typeface.create("serif", Typeface.BOLD)
+            background = null
+            setSingleLine(true)
+            setPadding(0, dp(8), 0, dp(15))
+        }
+
+        sheet.addView(titleInput)
+
+        val divider = android.view.View(this).apply {
+            setBackgroundColor(Color.rgb(225, 220, 207))
+        }
+
+        sheet.addView(
+            divider,
+            LinearLayout.LayoutParams(-1, dp(1))
+        )
+
+        bodyInput = EditText(this).apply {
+            hint = "오늘 있었던 일들을 자유롭게 적어보세요.\n\n기억하고 싶은 순간도 좋고,\n마음속에 담아둔 이야기도 좋습니다.\n\n이곳은 나만의 작은 기록 공간입니다."
+            setText(entry?.body ?: "")
+            textSize = 17f
+            setTextColor(ink)
+            setHintTextColor(Color.rgb(174, 168, 153))
+            gravity = Gravity.TOP
+            minLines = 15
+            background = null
+            setPadding(0, dp(20), 0, dp(15))
+            setLineSpacing(dp(5).toFloat(), 1f)
+        }
+
+        sheet.addView(bodyInput)
+
+        val save = Button(this).apply {
+            text = "기록 저장하기"
+            isAllCaps = false
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            background = rounded(accent, 10)
+            setOnClickListener { saveDiary() }
+        }
+
+        sheet.addView(
+            save,
+            LinearLayout.LayoutParams(-1, dp(52))
+        )
+
+        val newDiary = TextView(this).apply {
+            text = "+ 새 일기 쓰기"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(accent)
+            setPadding(dp(10), dp(22), dp(10), dp(15))
+            setOnClickListener {
+                buildDiary(target)
+            }
+        }
+
+        target.addView(newDiary)
     }
 
     private fun saveDiary() {
         val title = titleInput.text.toString().trim()
-        val content = contentInput.text.toString().trim()
+        val body = bodyInput.text.toString().trim()
 
-        if (title.isEmpty() && content.isEmpty()) {
+        if (title.isEmpty() && body.isEmpty()) {
             Toast.makeText(
                 this,
-                "오늘의 기록을 먼저 적어주세요.",
+                "내용을 입력해 주세요.",
                 Toast.LENGTH_SHORT
             ).show()
             return
         }
 
-        val entries = readEntries()
+        val id = selectedId ?: System.currentTimeMillis()
 
-        entries.put(JSONObject().apply {
-            put("title", title)
-            put("content", content)
-            put("date", System.currentTimeMillis())
-            put("mood", selectedMood)
-        })
+        val entry = DiaryEntry(
+            id,
+            dateText.text.toString(),
+            title,
+            body
+        )
 
-        prefs.edit().putString("entries", entries.toString()).apply()
+        val index = entries.indexOfFirst { it.id == id }
+
+        if (index >= 0) {
+            entries[index] = entry
+        } else {
+            entries.add(0, entry)
+        }
+
+        persistEntries()
+        selectedId = id
 
         Toast.makeText(
             this,
-            "오늘의 기록을 소중히 저장했어요.",
+            "일기가 저장되었습니다.",
             Toast.LENGTH_SHORT
         ).show()
     }
 
-    private fun readEntries(): JSONArray {
-        return try {
-            JSONArray(prefs.getString("entries", "[]") ?: "[]")
-        } catch (e: Exception) {
-            JSONArray()
+    private fun buildMemoCollection(
+        target: LinearLayout,
+        sticky: Boolean
+    ) {
+        target.removeAllViews()
+
+        val heading = TextView(this).apply {
+            text = if (sticky) "나의 작은 기록들"
+            else "소중한 하루의 기록"
+            textSize = 21f
+            typeface = Typeface.create("serif", Typeface.BOLD)
+            setTextColor(ink)
+            setPadding(dp(5), dp(10), dp(5), dp(8))
         }
-    }
 
-    private fun showSavedEntries() {
-        val entries = readEntries()
+        target.addView(heading)
 
-        if (entries.length() == 0) {
-            Toast.makeText(
-                this,
-                "아직 저장한 일기가 없어요.",
-                Toast.LENGTH_SHORT
-            ).show()
+        val description = TextView(this).apply {
+            text = if (sticky)
+                "메모지를 좌우로 넘겨 기록을 살펴보세요."
+            else
+                "아이보리 종이 위에 쌓인 나의 일기입니다."
+            textSize = 13f
+            setTextColor(Color.GRAY)
+            setPadding(dp(5), 0, dp(5), dp(18))
+        }
+
+        target.addView(description)
+
+        val add = TextView(this).apply {
+            text = "+ 새 일기 작성하기"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(accent)
+            setPadding(dp(12), dp(13), dp(12), dp(13))
+            background = rounded(paper, 10)
+            setOnClickListener {
+                currentMode = 0
+                showScreen()
+            }
+        }
+
+        target.addView(
+            add,
+            LinearLayout.LayoutParams(-1, -2)
+        )
+
+        if (entries.isEmpty()) {
+            val empty = TextView(this).apply {
+                text = "\n\n아직 기록이 없습니다.\n첫 번째 하루를 기록해 보세요."
+                textSize = 15f
+                gravity = Gravity.CENTER
+                setTextColor(Color.GRAY)
+                setPadding(dp(10), dp(35), dp(10), dp(35))
+            }
+            target.addView(empty)
             return
         }
 
-        val items = Array(entries.length()) { index ->
-            val item = entries.getJSONObject(
-                entries.length() - 1 - index
-            )
-
-            val date = SimpleDateFormat(
-                "yyyy.MM.dd",
-                Locale.KOREA
-            ).format(Date(item.optLong("date")))
-
-            "$date · ${item.optString("title", "제목 없는 기록")}"
+        val horizontal = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            setPadding(0, dp(15), 0, dp(15))
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("나의 하루 모음")
-            .setItems(items) { _, which ->
-                val item = entries.getJSONObject(
-                    entries.length() - 1 - which
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+        }
+
+        entries.forEachIndexed { index, entry ->
+
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.TOP
+                setPadding(
+                    dp(17), dp(20), dp(17), dp(17)
                 )
 
-                val savedTitle = item.optString("title")
-                val savedContent = item.optString("content")
+                val cardColor = if (sticky) {
+                    when (index % 4) {
+                        0 -> Color.rgb(255, 242, 190)
+                        1 -> Color.rgb(230, 239, 215)
+                        2 -> Color.rgb(246, 226, 218)
+                        else -> Color.rgb(232, 231, 245)
+                    }
+                } else {
+                    paper
+                }
 
-                selectedMood = item.optString("mood", "평온")
-                showDiary()
+                setBackground(
+                    rounded(cardColor, if (sticky) 5 else 8)
+                )
 
-                titleInput.setText(savedTitle)
-                contentInput.setText(savedContent)
+                elevation = dp(3).toFloat()
+
+                setOnClickListener {
+                    currentMode = 0
+                    showScreen()
+                    buildDiary(content, entry)
+                }
+            }
+
+            val date = TextView(this).apply {
+                text = entry.date
+                textSize = 11f
+                setTextColor(accent)
+            }
+
+            card.addView(date)
+
+            val title = TextView(this).apply {
+                text = entry.title.ifBlank { "제목 없는 일기" }
+                textSize = if (sticky) 16f else 19f
+                typeface = Typeface.create(
+                    "serif", Typeface.BOLD
+                )
+                setTextColor(ink)
+                setPadding(0, dp(13), 0, dp(12))
+                maxLines = 2
+            }
+
+            card.addView(title)
+
+            val body = TextView(this).apply {
+                text = entry.body.ifBlank { "내용 없음" }
+                textSize = 13f
+                setTextColor(ink)
+                maxLines = if (sticky) 7 else 12
+                setLineSpacing(dp(3).toFloat(), 1f)
+            }
+
+            card.addView(body)
+
+            val open = TextView(this).apply {
+                text = "기록 열기  →"
+                textSize = 12f
+                setTextColor(accent)
+                setPadding(0, dp(15), 0, 0)
+            }
+
+            card.addView(open)
+
+            val width = if (sticky) 155 else 245
+            val height = if (sticky) 230 else 340
+
+            val params = LinearLayout.LayoutParams(
+                dp(width), dp(height)
+            )
+
+            params.setMargins(
+                dp(5), dp(5), dp(12), dp(10)
+            )
+
+            row.addView(card, params)
+        }
+
+        horizontal.addView(row)
+
+        target.addView(
+            horizontal,
+            LinearLayout.LayoutParams(-1, -2)
+        )
+    }
+
+    private fun showHistory() {
+        if (entries.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setMessage("아직 작성한 일기가 없습니다.")
+                .setPositiveButton("확인", null)
+                .show()
+            return
+        }
+
+        val labels = entries.map {
+            val name = if (it.title.isBlank()) {
+                "제목 없는 일기"
+            } else {
+                it.title
+            }
+            "${it.date}  ·  $name"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("나의 일기")
+            .setItems(labels) { _, which ->
+                currentMode = 0
+                showScreen()
+                buildDiary(content, entries[which])
             }
             .setNegativeButton("닫기", null)
             .show()
     }
 
-    private fun primaryButton(
-        text: String,
-        action: () -> Unit
-    ) = Button(this).apply {
-        this.text = text
-        textSize = 16f
-        isAllCaps = false
-        typeface = Typeface.DEFAULT_BOLD
-        setTextColor(Color.WHITE)
-        background = rounded(brown, 14)
-        setPadding(dp(12), dp(8), dp(12), dp(8))
-        setOnClickListener { action() }
+    private fun loadEntries() {
+        entries.clear()
+
+        try {
+            val data = JSONArray(
+                prefs.getString("entries", "[]")
+            )
+
+            for (i in 0 until data.length()) {
+                val item = data.getJSONObject(i)
+
+                entries.add(
+                    DiaryEntry(
+                        item.getLong("id"),
+                        item.getString("date"),
+                        item.getString("title"),
+                        item.getString("body")
+                    )
+                )
+            }
+        } catch (_: Exception) {
+            entries.clear()
+        }
     }
 
-    private fun secondaryButton(
-        text: String,
-        action: () -> Unit
-    ) = Button(this).apply {
-        this.text = text
-        textSize = 14f
-        isAllCaps = false
-        setTextColor(brown)
-        background = rounded(Color.rgb(239, 232, 220), 14)
-        setOnClickListener { action() }
-    }
+    private fun persistEntries() {
+        val array = JSONArray()
 
-    private fun label(
-        text: String,
-        size: Int,
-        bold: Boolean,
-        color: Int
-    ) = TextView(this).apply {
-        this.text = text
-        textSize = size.toFloat()
-        setTextColor(color)
-
-        if (bold) {
-            setTypeface(null, Typeface.BOLD)
+        entries.forEach {
+            array.put(
+                JSONObject().apply {
+                    put("id", it.id)
+                    put("date", it.date)
+                    put("title", it.title)
+                    put("body", it.body)
+                }
+            )
         }
 
-        setLineSpacing(dp(3).toFloat(), 1f)
+        prefs.edit()
+            .putString("entries", array.toString())
+            .apply()
     }
 
-    private fun row() = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
+    private fun today(): String {
+        return SimpleDateFormat(
+            "yyyy년 M월 d일 E요일",
+            Locale.KOREAN
+        ).format(Date())
     }
 
     private fun rounded(
         color: Int,
         radius: Int
-    ) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = dp(radius).toFloat()
+    ): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+        }
     }
-
-    private fun space(parent: LinearLayout, height: Int) {
-        parent.addView(
-            View(this),
-            LinearLayout.LayoutParams(1, dp(height))
-        )
-    }
-
-    private fun todayString(): String {
-        return SimpleDateFormat(
-            "yyyy년 M월 d일 EEEE",
-            Locale.KOREA
-        ).format(Date())
-    }
-
-    private fun matchWidth() =
-        LinearLayout.LayoutParams(-1, -2)
 
     private fun dp(value: Int): Int {
-        return (value * resources.displayMetrics.density).toInt()
+        return (
+            value * resources.displayMetrics.density
+        ).toInt()
     }
 }
