@@ -53,7 +53,7 @@ class MainActivity : Activity() {
     private fun showScreen() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-          setBackgroundColor(pageBackground)  
+          setBackgroundColor(this@MainActivity.pageBackground)
         }
 
         val header = LinearLayout(this).apply {
