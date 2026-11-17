@@ -1,4 +1,4 @@
-
+import android.content.Intent
 package com.supermenpark.dayflowdiary
 
 import android.app.Activity
