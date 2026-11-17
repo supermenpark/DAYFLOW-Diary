@@ -98,7 +98,7 @@ class MainActivity : Activity() {
             textSize = 27f
             setTextColor(Color.WHITE)
             typeface = Typeface.create("serif", Typeface.BOLD)
-            shadowLayer(5f, 0f, 2f, Color.BLACK)
+            setShadowLayer
         }
 
         val logoParams = FrameLayout.LayoutParams(
