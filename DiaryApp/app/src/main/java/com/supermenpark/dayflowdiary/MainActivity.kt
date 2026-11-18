@@ -1,3 +1,4 @@
+
 package com.supermenpark.dayflowdiary
 
 import android.app.Activity
@@ -11,7 +12,6 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
-import android.widget.FrameLayout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -33,6 +33,7 @@ class MainActivity : Activity() {
     private lateinit var appContainer: LinearLayout
     private lateinit var drawerPanel: LinearLayout
     private lateinit var scrim: View
+    private lateinit var menuHandle: TextView
 
     private lateinit var content: LinearLayout
     private lateinit var titleInput: EditText
@@ -52,6 +53,8 @@ class MainActivity : Activity() {
     private val accent = Color.rgb(117, 125, 91)
     private val drawerColor = Color.rgb(49, 55, 49)
 
+    private val drawerWidth = 270
+
     data class DiaryEntry(
         val id: Long,
         val date: String,
@@ -65,7 +68,6 @@ class MainActivity : Activity() {
         showScreen()
     }
 
-    // 화면 가장자리 밀기로 메뉴 열고 닫기
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
 
         when (event.action) {
@@ -87,16 +89,14 @@ class MainActivity : Activity() {
 
                     if (
                         !drawerOpen &&
-                        touchStartX < dp(30) &&
+                        touchStartX < dp(35) &&
                         dx > 0
                     ) {
                         openDrawer()
-                    }
-
-                    else if (
+                    } else if (
                         drawerOpen &&
                         dx < 0 &&
-                        touchStartX < dp(290)
+                        touchStartX < dp(drawerWidth + 50)
                     ) {
                         closeDrawer()
                     }
@@ -108,6 +108,8 @@ class MainActivity : Activity() {
     }
 
     private fun showScreen() {
+
+        drawerOpen = false
 
         root = FrameLayout(this).apply {
             setBackgroundColor(pageBackground)
@@ -255,16 +257,14 @@ class MainActivity : Activity() {
         buildDrawer()
     }
 
-    // 슬라이드 메뉴 만들기
+    // 슬라이드 메뉴 및 항상 보이는 손잡이
     private fun buildDrawer() {
 
         scrim = View(this).apply {
             setBackgroundColor(Color.BLACK)
             alpha = 0f
             visibility = View.GONE
-            setOnClickListener {
-                closeDrawer()
-            }
+            setOnClickListener { closeDrawer() }
         }
 
         root.addView(
@@ -280,14 +280,14 @@ class MainActivity : Activity() {
         }
 
         val drawerParams = FrameLayout.LayoutParams(
-            dp(270),
+            dp(drawerWidth),
             -1,
             Gravity.START
         )
 
         root.addView(drawerPanel, drawerParams)
 
-        drawerPanel.translationX = -dp(270).toFloat()
+        drawerPanel.translationX = -dp(drawerWidth).toFloat()
 
         val brand = TextView(this).apply {
             text = "♡\nDAYFLOW\nDiary"
@@ -334,6 +334,7 @@ class MainActivity : Activity() {
         )
 
         val spacer = View(this)
+
         drawerPanel.addView(
             spacer,
             LinearLayout.LayoutParams(-1, 0, 1f)
@@ -357,9 +358,47 @@ class MainActivity : Activity() {
         }
 
         drawerPanel.addView(footer)
+
+        // 왼쪽 가장자리의 메뉴 손잡이
+        menuHandle = TextView(this).apply {
+
+            text = "›"
+            textSize = 27f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(117, 125, 91))
+                cornerRadii = floatArrayOf(
+                    0f, 0f,
+                    dp(13).toFloat(), dp(13).toFloat(),
+                    dp(13).toFloat(), dp(13).toFloat(),
+                    0f, 0f
+                )
+            }
+
+            elevation = dp(20).toFloat()
+
+            setOnClickListener {
+                if (drawerOpen) {
+                    closeDrawer()
+                } else {
+                    openDrawer()
+                }
+            }
+        }
+
+        val handleParams = FrameLayout.LayoutParams(
+            dp(25),
+            dp(76),
+            Gravity.START or Gravity.CENTER_VERTICAL
+        )
+
+        root.addView(menuHandle, handleParams)
+
+        menuHandle.translationX = 0f
     }
 
-    // 메뉴 항목
     private fun addDrawerItem(
         icon: String,
         name: String,
@@ -371,9 +410,7 @@ class MainActivity : Activity() {
             text = "$icon    $name"
             textSize = 16f
             gravity = Gravity.CENTER_VERTICAL
-
             setPadding(dp(15), 0, dp(8), 0)
-
             setTextColor(Color.WHITE)
 
             background = rounded(
@@ -409,6 +446,8 @@ class MainActivity : Activity() {
 
         scrim.visibility = View.VISIBLE
 
+        menuHandle.text = "‹"
+
         scrim.animate()
             .alpha(0.48f)
             .setDuration(220)
@@ -416,6 +455,11 @@ class MainActivity : Activity() {
 
         drawerPanel.animate()
             .translationX(0f)
+            .setDuration(240)
+            .start()
+
+        menuHandle.animate()
+            .translationX(dp(drawerWidth).toFloat())
             .setDuration(240)
             .start()
     }
@@ -427,8 +471,15 @@ class MainActivity : Activity() {
 
         drawerOpen = false
 
+        menuHandle.text = "›"
+
         drawerPanel.animate()
-            .translationX(-dp(270).toFloat())
+            .translationX(-dp(drawerWidth).toFloat())
+            .setDuration(220)
+            .start()
+
+        menuHandle.animate()
+            .translationX(0f)
             .setDuration(220)
             .start()
 
@@ -441,7 +492,7 @@ class MainActivity : Activity() {
             .start()
     }
 
-    // 날짜별 사진을 선택하고 같은 날에는 유지
+    // 날짜별 배경 사진
     private fun loadDailyBanner(target: ImageView) {
 
         val imageUrls = listOf(
@@ -522,6 +573,7 @@ class MainActivity : Activity() {
         }.start()
     }
 
+    // 일기 화면
     private fun buildDiary(
         target: LinearLayout,
         entry: DiaryEntry? = null
@@ -626,6 +678,7 @@ class MainActivity : Activity() {
         target.addView(newDiary)
     }
 
+    // 일기 저장
     private fun saveDiary() {
 
         val title = titleInput.text.toString().trim()
@@ -669,6 +722,7 @@ class MainActivity : Activity() {
         ).show()
     }
 
+    // 메모 모아보기
     private fun buildMemoCollection(
         target: LinearLayout,
         sticky: Boolean
@@ -835,6 +889,7 @@ class MainActivity : Activity() {
         )
     }
 
+    // 기록 보기
     private fun showHistory() {
 
         if (entries.isEmpty()) {
@@ -870,6 +925,7 @@ class MainActivity : Activity() {
             .show()
     }
 
+    // 저장된 일기 불러오기
     private fun loadEntries() {
 
         entries.clear()
@@ -900,6 +956,7 @@ class MainActivity : Activity() {
         }
     }
 
+    // 일기 저장 데이터 유지
     private fun persistEntries() {
 
         val array = JSONArray()
