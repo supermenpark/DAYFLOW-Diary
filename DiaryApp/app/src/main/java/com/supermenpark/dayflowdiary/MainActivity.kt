@@ -1,4 +1,3 @@
-import android.content.Intent
 package com.supermenpark.dayflowdiary
 
 import android.app.Activity
@@ -9,8 +8,10 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.*
+import android.widget.FrameLayout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -28,7 +29,11 @@ class MainActivity : Activity() {
 
     private val entries = mutableListOf<DiaryEntry>()
 
-    private lateinit var root: LinearLayout
+    private lateinit var root: FrameLayout
+    private lateinit var appContainer: LinearLayout
+    private lateinit var drawerPanel: LinearLayout
+    private lateinit var scrim: View
+
     private lateinit var content: LinearLayout
     private lateinit var titleInput: EditText
     private lateinit var bodyInput: EditText
@@ -36,11 +41,16 @@ class MainActivity : Activity() {
 
     private var selectedId: Long? = null
     private var currentMode = 0
+    private var drawerOpen = false
+
+    private var touchStartX = 0f
+    private var touchStartY = 0f
 
     private val paper = Color.rgb(255, 253, 246)
     private val pageBackground = Color.rgb(244, 240, 229)
     private val ink = Color.rgb(65, 61, 53)
     private val accent = Color.rgb(117, 125, 91)
+    private val drawerColor = Color.rgb(49, 55, 49)
 
     data class DiaryEntry(
         val id: Long,
@@ -55,11 +65,63 @@ class MainActivity : Activity() {
         showScreen()
     }
 
+    // 화면 가장자리 밀기로 메뉴 열고 닫기
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+
+        when (event.action) {
+
+            MotionEvent.ACTION_DOWN -> {
+                touchStartX = event.rawX
+                touchStartY = event.rawY
+            }
+
+            MotionEvent.ACTION_UP -> {
+
+                val dx = event.rawX - touchStartX
+                val dy = event.rawY - touchStartY
+
+                if (
+                    kotlin.math.abs(dx) > dp(65) &&
+                    kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.3f
+                ) {
+
+                    if (
+                        !drawerOpen &&
+                        touchStartX < dp(30) &&
+                        dx > 0
+                    ) {
+                        openDrawer()
+                    }
+
+                    else if (
+                        drawerOpen &&
+                        dx < 0 &&
+                        touchStartX < dp(290)
+                    ) {
+                        closeDrawer()
+                    }
+                }
+            }
+        }
+
+        return super.dispatchTouchEvent(event)
+    }
+
     private fun showScreen() {
-        root = LinearLayout(this).apply {
+
+        root = FrameLayout(this).apply {
+            setBackgroundColor(pageBackground)
+        }
+
+        appContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(pageBackground)
         }
+
+        root.addView(
+            appContainer,
+            FrameLayout.LayoutParams(-1, -1)
+        )
 
         val header = FrameLayout(this).apply {
             background = rounded(Color.rgb(115, 125, 104), 14)
@@ -122,7 +184,7 @@ class MainActivity : Activity() {
 
         val headerParams = LinearLayout.LayoutParams(-1, dp(165))
         headerParams.setMargins(dp(14), dp(12), dp(14), dp(12))
-        root.addView(header, headerParams)
+        appContainer.addView(header, headerParams)
 
         loadDailyBanner(bannerImage)
 
@@ -139,18 +201,22 @@ class MainActivity : Activity() {
         )
 
         menuNames.forEachIndexed { index, name ->
+
             val button = TextView(this).apply {
                 text = name
                 textSize = 12f
                 gravity = Gravity.CENTER
                 setPadding(dp(10), dp(12), dp(10), dp(12))
+
                 setTextColor(
                     if (currentMode == index) Color.WHITE else accent
                 )
+
                 background = rounded(
                     if (currentMode == index) accent else paper,
                     12
                 )
+
                 setOnClickListener {
                     currentMode = index
                     showScreen()
@@ -162,7 +228,7 @@ class MainActivity : Activity() {
             menu.addView(button, params)
         }
 
-        root.addView(menu)
+        appContainer.addView(menu)
 
         val scroll = ScrollView(this)
 
@@ -173,7 +239,7 @@ class MainActivity : Activity() {
 
         scroll.addView(content)
 
-        root.addView(
+        appContainer.addView(
             scroll,
             LinearLayout.LayoutParams(-1, 0, 1f)
         )
@@ -185,6 +251,194 @@ class MainActivity : Activity() {
             1 -> buildMemoCollection(content, false)
             2 -> buildMemoCollection(content, true)
         }
+
+        buildDrawer()
+    }
+
+    // 슬라이드 메뉴 만들기
+    private fun buildDrawer() {
+
+        scrim = View(this).apply {
+            setBackgroundColor(Color.BLACK)
+            alpha = 0f
+            visibility = View.GONE
+            setOnClickListener {
+                closeDrawer()
+            }
+        }
+
+        root.addView(
+            scrim,
+            FrameLayout.LayoutParams(-1, -1)
+        )
+
+        drawerPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(35), dp(20), dp(20))
+            setBackgroundColor(drawerColor)
+            elevation = dp(15).toFloat()
+        }
+
+        val drawerParams = FrameLayout.LayoutParams(
+            dp(270),
+            -1,
+            Gravity.START
+        )
+
+        root.addView(drawerPanel, drawerParams)
+
+        drawerPanel.translationX = -dp(270).toFloat()
+
+        val brand = TextView(this).apply {
+            text = "♡\nDAYFLOW\nDiary"
+            textSize = 25f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("serif", Typeface.BOLD)
+            setPadding(0, dp(15), 0, dp(35))
+        }
+
+        drawerPanel.addView(
+            brand,
+            LinearLayout.LayoutParams(-1, -2)
+        )
+
+        val line = View(this).apply {
+            setBackgroundColor(Color.rgb(110, 116, 105))
+        }
+
+        drawerPanel.addView(
+            line,
+            LinearLayout.LayoutParams(-1, dp(1))
+        )
+
+        addDrawerItem("⌂", "일기 쓰기", 0)
+        addDrawerItem("▤", "세로 메모지", 1)
+        addDrawerItem("▧", "포스트잇 모아보기", 2)
+
+        val historyItem = TextView(this).apply {
+            text = "▣    기록 보기"
+            textSize = 16f
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(Color.WHITE)
+            setPadding(dp(12), dp(17), dp(8), dp(17))
+            setOnClickListener {
+                closeDrawer()
+                showHistory()
+            }
+        }
+
+        drawerPanel.addView(
+            historyItem,
+            LinearLayout.LayoutParams(-1, dp(55))
+        )
+
+        val spacer = View(this)
+        drawerPanel.addView(
+            spacer,
+            LinearLayout.LayoutParams(-1, 0, 1f)
+        )
+
+        val footerLine = View(this).apply {
+            setBackgroundColor(Color.rgb(110, 116, 105))
+        }
+
+        drawerPanel.addView(
+            footerLine,
+            LinearLayout.LayoutParams(-1, dp(1))
+        )
+
+        val footer = TextView(this).apply {
+            text = "♥\n오늘도 행복한 하루 되세요\n:)"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(Color.LTGRAY)
+            setPadding(0, dp(20), 0, dp(20))
+        }
+
+        drawerPanel.addView(footer)
+    }
+
+    // 메뉴 항목
+    private fun addDrawerItem(
+        icon: String,
+        name: String,
+        mode: Int
+    ) {
+
+        val item = TextView(this).apply {
+
+            text = "$icon    $name"
+            textSize = 16f
+            gravity = Gravity.CENTER_VERTICAL
+
+            setPadding(dp(15), 0, dp(8), 0)
+
+            setTextColor(Color.WHITE)
+
+            background = rounded(
+                if (currentMode == mode)
+                    Color.rgb(91, 119, 153)
+                else
+                    drawerColor,
+                12
+            )
+
+            setOnClickListener {
+                currentMode = mode
+                showScreen()
+            }
+        }
+
+        val params = LinearLayout.LayoutParams(
+            -1,
+            dp(57)
+        )
+
+        params.setMargins(0, dp(7), 0, dp(7))
+
+        drawerPanel.addView(item, params)
+    }
+
+    // 메뉴 열기
+    private fun openDrawer() {
+
+        if (drawerOpen) return
+
+        drawerOpen = true
+
+        scrim.visibility = View.VISIBLE
+
+        scrim.animate()
+            .alpha(0.48f)
+            .setDuration(220)
+            .start()
+
+        drawerPanel.animate()
+            .translationX(0f)
+            .setDuration(240)
+            .start()
+    }
+
+    // 메뉴 닫기
+    private fun closeDrawer() {
+
+        if (!drawerOpen) return
+
+        drawerOpen = false
+
+        drawerPanel.animate()
+            .translationX(-dp(270).toFloat())
+            .setDuration(220)
+            .start()
+
+        scrim.animate()
+            .alpha(0f)
+            .setDuration(220)
+            .withEndAction {
+                scrim.visibility = View.GONE
+            }
+            .start()
     }
 
     // 날짜별 사진을 선택하고 같은 날에는 유지
@@ -207,9 +461,12 @@ class MainActivity : Activity() {
         val savedDate = prefs.getString("banner_date", "")
 
         val imageIndex = if (savedDate == todayKey) {
+
             prefs.getInt("banner_index", 0)
                 .coerceIn(imageUrls.indices)
+
         } else {
+
             val previous = prefs.getInt("banner_index", -1)
             var next = Random.nextInt(imageUrls.size)
 
@@ -226,9 +483,11 @@ class MainActivity : Activity() {
         }
 
         Thread {
+
             var connection: HttpURLConnection? = null
 
             try {
+
                 connection = URL(imageUrls[imageIndex])
                     .openConnection() as HttpURLConnection
 
@@ -242,17 +501,24 @@ class MainActivity : Activity() {
                 }
 
                 if (bitmap != null) {
+
                     runOnUiThread {
+
                         if (!isFinishing && !isDestroyed) {
                             target.setImageBitmap(bitmap)
                         }
                     }
                 }
+
             } catch (_: Exception) {
+
                 // 사진을 불러오지 못하면 기본 배경 유지
+
             } finally {
+
                 connection?.disconnect()
             }
+
         }.start()
     }
 
@@ -260,6 +526,7 @@ class MainActivity : Activity() {
         target: LinearLayout,
         entry: DiaryEntry? = null
     ) {
+
         target.removeAllViews()
         selectedId = entry?.id
 
@@ -360,15 +627,18 @@ class MainActivity : Activity() {
     }
 
     private fun saveDiary() {
+
         val title = titleInput.text.toString().trim()
         val body = bodyInput.text.toString().trim()
 
         if (title.isEmpty() && body.isEmpty()) {
+
             Toast.makeText(
                 this,
                 "내용을 입력해 주세요.",
                 Toast.LENGTH_SHORT
             ).show()
+
             return
         }
 
@@ -403,11 +673,13 @@ class MainActivity : Activity() {
         target: LinearLayout,
         sticky: Boolean
     ) {
+
         target.removeAllViews()
 
         val heading = TextView(this).apply {
             text = if (sticky) "나의 작은 기록들"
             else "소중한 하루의 기록"
+
             textSize = 21f
             typeface = Typeface.create("serif", Typeface.BOLD)
             setTextColor(ink)
@@ -421,6 +693,7 @@ class MainActivity : Activity() {
                 "메모지를 좌우로 넘겨 기록을 살펴보세요."
             else
                 "아이보리 종이 위에 쌓인 나의 일기입니다."
+
             textSize = 13f
             setTextColor(Color.GRAY)
             setPadding(dp(5), 0, dp(5), dp(18))
@@ -435,6 +708,7 @@ class MainActivity : Activity() {
             setTextColor(accent)
             setPadding(dp(12), dp(13), dp(12), dp(13))
             background = rounded(paper, 10)
+
             setOnClickListener {
                 currentMode = 0
                 showScreen()
@@ -447,6 +721,7 @@ class MainActivity : Activity() {
         )
 
         if (entries.isEmpty()) {
+
             val empty = TextView(this).apply {
                 text = "\n\n아직 기록이 없습니다.\n첫 번째 하루를 기록해 보세요."
                 textSize = 15f
@@ -454,6 +729,7 @@ class MainActivity : Activity() {
                 setTextColor(Color.GRAY)
                 setPadding(dp(10), dp(35), dp(10), dp(35))
             }
+
             target.addView(empty)
             return
         }
@@ -471,17 +747,20 @@ class MainActivity : Activity() {
         entries.forEachIndexed { index, entry ->
 
             val card = LinearLayout(this).apply {
+
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.TOP
                 setPadding(dp(17), dp(20), dp(17), dp(17))
 
                 val cardColor = if (sticky) {
+
                     when (index % 4) {
                         0 -> Color.rgb(255, 242, 190)
                         1 -> Color.rgb(230, 239, 215)
                         2 -> Color.rgb(246, 226, 218)
                         else -> Color.rgb(232, 231, 245)
                     }
+
                 } else {
                     paper
                 }
@@ -557,21 +836,27 @@ class MainActivity : Activity() {
     }
 
     private fun showHistory() {
+
         if (entries.isEmpty()) {
+
             AlertDialog.Builder(this)
                 .setMessage("아직 작성한 일기가 없습니다.")
                 .setPositiveButton("확인", null)
                 .show()
+
             return
         }
 
         val labels = entries.map {
+
             val name = if (it.title.isBlank()) {
                 "제목 없는 일기"
             } else {
                 it.title
             }
+
             "${it.date}  ·  $name"
+
         }.toTypedArray()
 
         AlertDialog.Builder(this)
@@ -586,14 +871,17 @@ class MainActivity : Activity() {
     }
 
     private fun loadEntries() {
+
         entries.clear()
 
         try {
+
             val data = JSONArray(
                 prefs.getString("entries", "[]")
             )
 
             for (i in 0 until data.length()) {
+
                 val item = data.getJSONObject(i)
 
                 entries.add(
@@ -605,15 +893,19 @@ class MainActivity : Activity() {
                     )
                 )
             }
+
         } catch (_: Exception) {
+
             entries.clear()
         }
     }
 
     private fun persistEntries() {
+
         val array = JSONArray()
 
         entries.forEach {
+
             array.put(
                 JSONObject().apply {
                     put("id", it.id)
@@ -630,6 +922,7 @@ class MainActivity : Activity() {
     }
 
     private fun today(): String {
+
         return SimpleDateFormat(
             "yyyy년 M월 d일 E요일",
             Locale.KOREAN
@@ -640,6 +933,7 @@ class MainActivity : Activity() {
         color: Int,
         radius: Int
     ): GradientDrawable {
+
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = dp(radius).toFloat()
@@ -647,6 +941,7 @@ class MainActivity : Activity() {
     }
 
     private fun dp(value: Int): Int {
+
         return (
             value * resources.displayMetrics.density
         ).toInt()
