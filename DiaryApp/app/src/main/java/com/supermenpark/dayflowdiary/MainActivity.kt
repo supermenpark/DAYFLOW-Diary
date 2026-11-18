@@ -3,6 +3,8 @@ package com.supermenpark.dayflowdiary
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -28,6 +30,8 @@ class MainActivity : Activity() {
     }
 
     private val entries = mutableListOf<DiaryEntry>()
+    private val photoUris = mutableListOf<String>()
+    private val PHOTO_PICK_REQUEST = 410
 
     private lateinit var root: FrameLayout
     private lateinit var appContainer: LinearLayout
@@ -65,6 +69,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         loadEntries()
+        loadPhotos()
         showScreen()
     }
 
@@ -252,6 +257,7 @@ class MainActivity : Activity() {
             0 -> buildDiary(content)
             1 -> buildMemoCollection(content, false)
             2 -> buildMemoCollection(content, true)
+            3 -> buildPhotoAlbum(content)
         }
 
         buildDrawer()
@@ -315,6 +321,7 @@ class MainActivity : Activity() {
         addDrawerItem("⌂", "일기 쓰기", 0)
         addDrawerItem("▤", "세로 메모지", 1)
         addDrawerItem("▧", "포스트잇 모아보기", 2)
+        addDrawerItem("▣", "사진첩", 3)
 
         val historyItem = TextView(this).apply {
             text = "▣    기록 보기"
@@ -887,6 +894,248 @@ class MainActivity : Activity() {
             horizontal,
             LinearLayout.LayoutParams(-1, -2)
         )
+    }
+
+    // 사진첩 화면
+    private fun buildPhotoAlbum(target: LinearLayout) {
+
+        target.removeAllViews()
+
+        val heading = TextView(this).apply {
+            text = "나의 사진첩"
+            textSize = 23f
+            typeface = Typeface.create("serif", Typeface.BOLD)
+            setTextColor(ink)
+            setPadding(dp(5), dp(12), dp(5), dp(6))
+        }
+
+        target.addView(heading)
+
+        val description = TextView(this).apply {
+            text = "소중한 순간을 사진으로 보관하세요."
+            textSize = 13f
+            setTextColor(Color.GRAY)
+            setPadding(dp(5), 0, dp(5), dp(18))
+        }
+
+        target.addView(description)
+
+        val addButton = TextView(this).apply {
+            text = "+ 휴대폰에서 사진 가져오기"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setPadding(dp(12), dp(15), dp(12), dp(15))
+            background = rounded(accent, 12)
+            setOnClickListener { openPhotoPicker() }
+        }
+
+        target.addView(
+            addButton,
+            LinearLayout.LayoutParams(-1, -2).apply {
+                setMargins(0, 0, 0, dp(18))
+            }
+        )
+
+        if (photoUris.isEmpty()) {
+
+            val empty = TextView(this).apply {
+                text = "\n\n📷\n\n아직 보관한 사진이 없습니다.\n위 버튼을 눌러 첫 사진을 추가해 보세요."
+                textSize = 15f
+                gravity = Gravity.CENTER
+                setTextColor(Color.GRAY)
+                setPadding(dp(12), dp(35), dp(12), dp(35))
+                background = rounded(paper, 12)
+            }
+
+            target.addView(
+                empty,
+                LinearLayout.LayoutParams(-1, dp(250))
+            )
+
+            return
+        }
+
+        val grid = android.widget.GridLayout(this).apply {
+            columnCount = 3
+            alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS
+            useDefaultMargins = false
+        }
+
+        photoUris.forEach { uriString ->
+
+            val image = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = rounded(Color.rgb(230, 226, 215), 7)
+                setImageURI(Uri.parse(uriString))
+                setOnClickListener { showPhoto(uriString) }
+            }
+
+            val params = android.widget.GridLayout.LayoutParams().apply {
+                width = 0
+                height = dp(112)
+                columnSpec = android.widget.GridLayout.spec(
+                    android.widget.GridLayout.UNDEFINED, 1f
+                )
+                setMargins(dp(3), dp(3), dp(3), dp(3))
+            }
+
+            grid.addView(image, params)
+        }
+
+        target.addView(grid)
+    }
+
+    // 휴대폰 사진 선택
+    private fun openPhotoPicker() {
+
+        try {
+
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "image/*"
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                )
+            }
+
+            startActivityForResult(intent, PHOTO_PICK_REQUEST)
+
+        } catch (_: Exception) {
+
+            Toast.makeText(
+                this,
+                "사진 선택 기능을 열 수 없습니다.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    @Deprecated("Deprecated in Android, retained for broad device compatibility")
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?
+    ) {
+
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (
+            requestCode != PHOTO_PICK_REQUEST ||
+            resultCode != RESULT_OK ||
+            data == null
+        ) return
+
+        val picked = mutableListOf<Uri>()
+
+        data.clipData?.let { clip ->
+
+            for (i in 0 until clip.itemCount) {
+                clip.getItemAt(i).uri?.let {
+                    picked.add(it)
+                }
+            }
+        }
+
+        if (picked.isEmpty()) {
+            data.data?.let { picked.add(it) }
+        }
+
+        var added = 0
+
+        picked.forEach { uri ->
+
+            try {
+
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+
+            } catch (_: Exception) {
+
+                // 일부 사진 제공자는 영구 권한을 지원하지 않을 수 있음
+            }
+
+            if (!photoUris.contains(uri.toString())) {
+                photoUris.add(0, uri.toString())
+                added++
+            }
+        }
+
+        savePhotos()
+        showScreen()
+
+        Toast.makeText(
+            this,
+            "${added}장의 사진을 사진첩에 추가했습니다.",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    // 사진 크게 보기 및 삭제
+    private fun showPhoto(uriString: String) {
+
+        val image = ImageView(this).apply {
+            setImageURI(Uri.parse(uriString))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            setBackgroundColor(Color.BLACK)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("사진")
+            .setView(image)
+            .setPositiveButton("닫기", null)
+            .setNegativeButton("사진 삭제") { _, _ ->
+
+                photoUris.remove(uriString)
+                savePhotos()
+                showScreen()
+
+                Toast.makeText(
+                    this,
+                    "사진을 사진첩에서 삭제했습니다.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            .show()
+    }
+
+    // 사진첩은 일기 데이터와 별도로 저장
+    private fun loadPhotos() {
+
+        photoUris.clear()
+
+        try {
+
+            val data = JSONArray(
+                prefs.getString("photos", "[]")
+            )
+
+            for (i in 0 until data.length()) {
+                photoUris.add(data.getString(i))
+            }
+
+        } catch (_: Exception) {
+
+            photoUris.clear()
+        }
+    }
+
+    private fun savePhotos() {
+
+        val array = JSONArray()
+
+        photoUris.forEach {
+            array.put(it)
+        }
+
+        prefs.edit()
+            .putString("photos", array.toString())
+            .apply()
     }
 
     // 기록 보기
