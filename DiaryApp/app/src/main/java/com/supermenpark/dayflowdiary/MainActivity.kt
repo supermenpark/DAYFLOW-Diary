@@ -31,7 +31,8 @@ class MainActivity : Activity() {
 
     private val entries = mutableListOf<DiaryEntry>()
     private val photoUris = mutableListOf<String>()
-    private val PHOTO_PICK_REQUEST = 410
+private val selectedPhotoUris = mutableSetOf<String>()
+private val PHOTO_PICK_REQUEST = 410
 
     private lateinit var root: FrameLayout
     private lateinit var appContainer: LinearLayout
@@ -956,6 +957,69 @@ class MainActivity : Activity() {
             return
         }
 
+                val selectionBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(10))
+        }
+
+        val selectionInfo = TextView(this).apply {
+            text = "사진을 길게 눌러 여러 장을 선택하세요."
+            textSize = 12f
+            setTextColor(Color.GRAY)
+        }
+
+        selectionBar.addView(
+            selectionInfo,
+            LinearLayout.LayoutParams(0, -2, 1f)
+        )
+
+        val deleteButton = TextView(this).apply {
+            text = "선택 삭제"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setPadding(dp(13), dp(9), dp(13), dp(9))
+            background = rounded(accent, 9)
+
+            visibility = if (selectedPhotoUris.isEmpty()) {
+                View.GONE
+            } else {
+                View.VISIBLE
+            }
+
+            setOnClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setMessage(
+                        "${selectedPhotoUris.size}장의 사진을 삭제할까요?"
+                    )
+                    .setNegativeButton("취소", null)
+                    .setPositiveButton("삭제") { _, _ ->
+
+                        val deleting = selectedPhotoUris.toList()
+
+                        deleting.forEach { uriString ->
+                            deleteStoredPhoto(uriString)
+                            photoUris.remove(uriString)
+                        }
+
+                        selectedPhotoUris.clear()
+                        savePhotos()
+                        showScreen()
+
+                        Toast.makeText(
+                            this@MainActivity,
+                            "선택한 사진을 삭제했습니다.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    .show()
+            }
+        }
+
+        selectionBar.addView(deleteButton)
+        target.addView(selectionBar)
+
         val grid = android.widget.GridLayout(this).apply {
             columnCount = 3
             alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS
@@ -967,15 +1031,39 @@ class MainActivity : Activity() {
             val image = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 background = rounded(Color.rgb(230, 226, 215), 7)
-                setImageURI(Uri.parse(uriString))
-                setOnClickListener { showPhoto(uriString) }
+
+                try {
+                    setImageURI(Uri.parse(uriString))
+                } catch (_: Exception) {
+                    setBackgroundColor(Color.LTGRAY)
+                }
+
+                setOnClickListener {
+                    if (selectedPhotoUris.isNotEmpty()) {
+                        togglePhotoSelection(uriString)
+                    } else {
+                        showPhoto(uriString)
+                    }
+                }
+
+                setOnLongClickListener {
+                    togglePhotoSelection(uriString)
+                    true
+                }
+
+                if (selectedPhotoUris.contains(uriString)) {
+                    foreground = android.graphics.drawable.ColorDrawable(
+                        0x66000000
+                    )
+                }
             }
 
             val params = android.widget.GridLayout.LayoutParams().apply {
                 width = 0
                 height = dp(112)
                 columnSpec = android.widget.GridLayout.spec(
-                    android.widget.GridLayout.UNDEFINED, 1f
+                    android.widget.GridLayout.UNDEFINED,
+                    1f
                 )
                 setMargins(dp(3), dp(3), dp(3), dp(3))
             }
@@ -1014,6 +1102,7 @@ class MainActivity : Activity() {
     }
 
     @Deprecated("Deprecated in Android, retained for broad device compatibility")
+        @Deprecated("Deprecated in Android")
     override fun onActivityResult(
         requestCode: Int,
         resultCode: Int,
@@ -1031,11 +1120,72 @@ class MainActivity : Activity() {
         val picked = mutableListOf<Uri>()
 
         data.clipData?.let { clip ->
-
             for (i in 0 until clip.itemCount) {
-                clip.getItemAt(i).uri?.let {
-                    picked.add(it)
+                picked.add(clip.getItemAt(i).uri)
+            }
+        }
+
+        if (picked.isEmpty()) {
+            data.data?.let { picked.add(it) }
+        }
+
+        var added = 0
+
+        picked.forEach { uri ->
+
+            try {
+                val folder = java.io.File(filesDir, "diary_photos")
+
+                if (!folder.exists()) {
+                    folder.mkdirs()
                 }
+
+                val extension = when (
+                    contentResolver.getType(uri)?.lowercase(Locale.ROOT)
+                ) {
+                    "image/png" -> ".png"
+                    "image/webp" -> ".webp"
+                    "image/gif" -> ".gif"
+                    else -> ".jpg"
+                }
+
+                val destination = java.io.File(
+                    folder,
+                    "photo_${System.currentTimeMillis()}_${Random.nextInt(100000)}$extension"
+                )
+
+                val copied = contentResolver.openInputStream(uri)?.use { input ->
+                    destination.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                    true
+                } ?: false
+
+                if (copied && destination.exists() && destination.length() > 0L) {
+
+                    val savedUri = Uri.fromFile(destination).toString()
+
+                    if (!photoUris.contains(savedUri)) {
+                        photoUris.add(0, savedUri)
+                        added++
+                    }
+                }
+
+            } catch (_: Exception) {
+                // 읽을 수 없는 사진은 건너뜀
+            }
+        }
+
+        selectedPhotoUris.clear()
+        savePhotos()
+        showScreen()
+
+        Toast.makeText(
+            this,
+            "${added}장의 사진을 앱에 보관했습니다.",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
             }
         }
 
