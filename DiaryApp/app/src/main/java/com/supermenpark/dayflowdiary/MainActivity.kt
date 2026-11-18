@@ -1241,9 +1241,11 @@ private val PHOTO_PICK_REQUEST = 410
             .setPositiveButton("닫기", null)
             .setNegativeButton("사진 삭제") { _, _ ->
 
-                photoUris.remove(uriString)
-                savePhotos()
-                showScreen()
+                deleteStoredPhoto(uriString)
+photoUris.remove(uriString)
+selectedPhotoUris.remove(uriString)
+savePhotos()
+showScreen()
 
                 Toast.makeText(
                     this,
