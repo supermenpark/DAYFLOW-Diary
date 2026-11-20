@@ -238,3 +238,242 @@ class MainActivity : Activity() {
 
         buildDrawer()
     }
+    // 슬라이드 메뉴 및 항상 보이는 손잡이
+    private fun buildDrawer() {
+        scrim = View(this).apply {
+            setBackgroundColor(Color.BLACK)
+            alpha = 0f
+            visibility = View.GONE
+            setOnClickListener { closeDrawer() }
+        }
+
+        root.addView(scrim, FrameLayout.LayoutParams(-1, -1))
+
+        drawerPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(35), dp(20), dp(20))
+            setBackgroundColor(drawerColor)
+            elevation = dp(15).toFloat()
+        }
+
+        val drawerParams = FrameLayout.LayoutParams(
+            dp(drawerWidth), -1, Gravity.START
+        )
+        root.addView(drawerPanel, drawerParams)
+        drawerPanel.translationX = -dp(drawerWidth).toFloat()
+
+        val brand = TextView(this).apply {
+            text = "♡\nDAYFLOW\nDiary"
+            textSize = 25f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("serif", Typeface.BOLD)
+            setPadding(0, dp(15), 0, dp(35))
+        }
+
+        drawerPanel.addView(brand, LinearLayout.LayoutParams(-1, -2))
+
+        val line = View(this).apply {
+            setBackgroundColor(Color.rgb(110, 116, 105))
+        }
+        drawerPanel.addView(line, LinearLayout.LayoutParams(-1, dp(1)))
+
+        addDrawerItem("⌂", "일기 쓰기", 0)
+        addDrawerItem("▤", "세로 메모지", 1)
+        addDrawerItem("▧", "포스트잇 모아보기", 2)
+        addDrawerItem("▣", "사진첩", 3)
+
+        val historyItem = TextView(this).apply {
+            text = "▣    기록 보기"
+            textSize = 16f
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(Color.WHITE)
+            setPadding(dp(12), dp(17), dp(8), dp(17))
+            setOnClickListener {
+                closeDrawer()
+                showHistory()
+            }
+        }
+
+        drawerPanel.addView(historyItem, LinearLayout.LayoutParams(-1, dp(55)))
+
+        drawerPanel.addView(
+            View(this),
+            LinearLayout.LayoutParams(-1, 0, 1f)
+        )
+
+        val footerLine = View(this).apply {
+            setBackgroundColor(Color.rgb(110, 116, 105))
+        }
+        drawerPanel.addView(footerLine, LinearLayout.LayoutParams(-1, dp(1)))
+
+        val footer = TextView(this).apply {
+            text = "♥\n오늘도 행복한 하루 되세요\n:)"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(Color.LTGRAY)
+            setPadding(0, dp(20), 0, dp(20))
+        }
+        drawerPanel.addView(footer)
+
+        menuHandle = TextView(this).apply {
+            text = "›"
+            textSize = 27f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(117, 125, 91))
+                cornerRadii = floatArrayOf(
+                    0f, 0f,
+                    dp(13).toFloat(), dp(13).toFloat(),
+                    dp(13).toFloat(), dp(13).toFloat(),
+                    0f, 0f
+                )
+            }
+            elevation = dp(20).toFloat()
+            setOnClickListener {
+                if (drawerOpen) closeDrawer() else openDrawer()
+            }
+        }
+
+        val handleParams = FrameLayout.LayoutParams(
+            dp(25), dp(76), Gravity.START or Gravity.CENTER_VERTICAL
+        )
+        root.addView(menuHandle, handleParams)
+        menuHandle.translationX = 0f
+    }
+
+    private fun addDrawerItem(icon: String, name: String, mode: Int) {
+        val item = TextView(this).apply {
+            text = "$icon    $name"
+            textSize = 16f
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(15), 0, dp(8), 0)
+            setTextColor(Color.WHITE)
+            background = rounded(
+                if (currentMode == mode) Color.rgb(91, 119, 153)
+                else drawerColor,
+                12
+            )
+            setOnClickListener {
+                currentMode = mode
+                selectedPhotoUris.clear()
+                showScreen()
+            }
+        }
+
+        val params = LinearLayout.LayoutParams(-1, dp(57))
+        params.setMargins(0, dp(7), 0, dp(7))
+        drawerPanel.addView(item, params)
+    }
+
+    private fun openDrawer() {
+        if (drawerOpen) return
+        drawerOpen = true
+        scrim.visibility = View.VISIBLE
+        menuHandle.text = "‹"
+
+        scrim.animate().alpha(0.48f).setDuration(220).start()
+        drawerPanel.animate().translationX(0f).setDuration(240).start()
+        menuHandle.animate()
+            .translationX(dp(drawerWidth).toFloat())
+            .setDuration(240)
+            .start()
+    }
+
+    private fun closeDrawer() {
+        if (!drawerOpen) return
+        drawerOpen = false
+        menuHandle.text = "›"
+
+        drawerPanel.animate()
+            .translationX(-dp(drawerWidth).toFloat())
+            .setDuration(220)
+            .start()
+
+        menuHandle.animate()
+            .translationX(0f)
+            .setDuration(220)
+            .start()
+
+        scrim.animate()
+            .alpha(0f)
+            .setDuration(220)
+            .withEndAction { scrim.visibility = View.GONE }
+            .start()
+    }
+
+    // 날짜별 배경 사진
+    private fun loadDailyBanner(target: ImageView) {
+        val imageUrls = listOf(
+            "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200&auto=format&fit=crop"
+        )
+
+        val todayKey = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        val savedDate = prefs.getString("banner_date", "")
+
+        val imageIndex = if (savedDate == todayKey) {
+            prefs.getInt("banner_index", 0).coerceIn(imageUrls.indices)
+        } else {
+            val previous = prefs.getInt("banner_index", -1)
+            var next = Random.nextInt(imageUrls.size)
+            if (imageUrls.size > 1 && next == previous) {
+                next = (next + 1) % imageUrls.size
+            }
+            prefs.edit()
+                .putString("banner_date", todayKey)
+                .putInt("banner_index", next)
+                .apply()
+            next
+        }
+
+        Thread {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = URL(imageUrls[imageIndex]).openConnection() as HttpURLConnection
+                connection.connectTimeout = 10000
+                connection.readTimeout = 15000
+                connection.requestMethod = "GET"
+                connection.connect()
+
+                val bitmap = connection.inputStream.use {
+                    BitmapFactory.decodeStream(it)
+                }
+
+                if (bitmap != null) {
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) {
+                            target.setImageBitmap(bitmap)
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // 사진을 불러오지 못하면 기본 배경 유지
+            } finally {
+                connection?.disconnect()
+            }
+        }.start()
+    }
+
+    // 일기 화면
+    private fun buildDiary(target: LinearLayout, entry: DiaryEntry? = null) {
+        target.removeAllViews()
+        selectedId = entry?.id
+
+        val sheet = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(23), dp(25), dp(23), dp(25))
+            setBackground(rounded(paper, 8))
+            elevation = dp(3).toFloat()
+        }
+
+        target.addView(sheet, LinearLayout.LayoutParams(-1, -2))
+
+        val smallTitle = TextView(this).apply {
+            text = "TODAY'S DIARY"
+            textSize = 11f
