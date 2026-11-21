@@ -198,11 +198,17 @@ weatherText = TextView(this).apply {
     }
 }
 
+
 val weatherParams = FrameLayout.LayoutParams(
-    -2, -2, Gravity.TOP or Gravity.END
+    dp(165), dp(46), Gravity.TOP or Gravity.END
 )
-weatherParams.setMargins(dp(8), dp(48), dp(13), 0)
+weatherParams.setMargins(0, dp(48), dp(13), 0)
+
+weatherText.visibility = View.VISIBLE
+weatherText.elevation = dp(12).toFloat()
 header.addView(weatherText, weatherParams)
+weatherText.bringToFront()
+
 
         val headerParams = LinearLayout.LayoutParams(-1, dp(165))
         headerParams.setMargins(dp(14), dp(12), dp(14), dp(12))
