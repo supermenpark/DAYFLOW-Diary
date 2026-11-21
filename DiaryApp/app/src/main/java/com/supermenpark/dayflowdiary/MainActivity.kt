@@ -1,6 +1,11 @@
 package com.supermenpark.dayflowdiary
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
+import android.location.LocationManager
 import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
@@ -34,7 +39,8 @@ class MainActivity : Activity() {
     private val selectedPhotoUris = mutableSetOf<String>()
 
     private val PHOTO_PICK_REQUEST = 410
-
+private val LOCATION_PERMISSION_REQUEST = 520
+private lateinit var weatherText: TextView
     private lateinit var root: FrameLayout
     private lateinit var appContainer: LinearLayout
     private lateinit var drawerPanel: LinearLayout
@@ -172,13 +178,31 @@ class MainActivity : Activity() {
         )
         historyParams.setMargins(0, dp(10), dp(13), 0)
         header.addView(history, historyParams)
+         // 배너 오른쪽 위 지역 및 날씨 표시
+weatherText = TextView(this).apply {
+    text = "📍 날씨 확인 중…"
+    textSize = 12f
+    setTextColor(Color.WHITE)
+    gravity = Gravity.END
+    setPadding(dp(8), dp(5), dp(8), dp(5))
+    setShadowLayer(3f, 0f, 1f, Color.BLACK)
+    setOnClickListener {
+        loadWeatherForCurrentLocation()
+    }
+}
+
+val weatherParams = FrameLayout.LayoutParams(
+    -2, -2, Gravity.TOP or Gravity.END
+)
+weatherParams.setMargins(dp(8), dp(48), dp(13), 0)
+header.addView(weatherText, weatherParams)       
 
         val headerParams = LinearLayout.LayoutParams(-1, dp(165))
         headerParams.setMargins(dp(14), dp(12), dp(14), dp(12))
         appContainer.addView(header, headerParams)
 
         loadDailyBanner(bannerImage)
-
+loadWeatherForCurrentLocation()
         val menu = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -1112,7 +1136,189 @@ class MainActivity : Activity() {
             cornerRadius = dp(radius).toFloat()
         }
     }
+// 현재 위치 확인
+private fun loadWeatherForCurrentLocation() {
+    if (!::weatherText.isInitialized) return
 
+    val granted = checkSelfPermission(
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
+    if (!granted) {
+        weatherText.text = "📍 위치 권한 허용"
+
+        requestPermissions(
+            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION),
+            LOCATION_PERMISSION_REQUEST
+        )
+        return
+    }
+
+    try {
+        val manager =
+            getSystemService(LOCATION_SERVICE) as LocationManager
+
+        var bestLocation: Location? = null
+
+        for (provider in manager.getProviders(true)) {
+            val location = try {
+                manager.getLastKnownLocation(provider)
+            } catch (_: SecurityException) {
+                null
+            }
+
+            if (location != null &&
+                (bestLocation == null ||
+                 location.accuracy < bestLocation!!.accuracy)
+            ) {
+                bestLocation = location
+            }
+        }
+
+        if (bestLocation != null) {
+            fetchWeather(
+                bestLocation!!.latitude,
+                bestLocation!!.longitude
+            )
+        } else {
+            weatherText.text = "📍 위치 정보 없음"
+        }
+
+    } catch (_: Exception) {
+        weatherText.text = "📍 위치 확인 실패"
+    }
+}
+
+// 현재 날씨 조회
+private fun fetchWeather(
+    latitude: Double,
+    longitude: Double
+) {
+    weatherText.text = "📍 날씨 불러오는 중…"
+
+    Thread {
+        var placeName = "현재 위치"
+        var weatherLine = "날씨 정보를 가져오지 못했습니다"
+
+        try {
+            try {
+                val geocoder = Geocoder(this, Locale.KOREAN)
+
+                @Suppress("DEPRECATION")
+                val addresses = geocoder.getFromLocation(
+                    latitude,
+                    longitude,
+                    1
+                )
+
+                if (!addresses.isNullOrEmpty()) {
+                    placeName =
+                        addresses[0].locality
+                            ?: addresses[0].subLocality
+                            ?: addresses[0].adminArea
+                            ?: "현재 위치"
+                }
+            } catch (_: Exception) {
+            }
+
+            val url = URL(
+                "https://api.open-meteo.com/v1/forecast" +
+                "?latitude=$latitude" +
+                "&longitude=$longitude" +
+                "&current=temperature_2m,weather_code" +
+                "&timezone=auto"
+            )
+
+            val connection =
+                url.openConnection() as HttpURLConnection
+
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
+
+            try {
+                val json = JSONObject(
+                    connection.inputStream.bufferedReader().use {
+                        it.readText()
+                    }
+                )
+
+                val current = json.getJSONObject("current")
+
+                val temperature =
+                    current.getDouble("temperature_2m").toInt()
+
+                val code = current.getInt("weather_code")
+
+                val description = when (code) {
+                    0 -> "맑음"
+                    1, 2 -> "구름 조금"
+                    3 -> "흐림"
+                    45, 48 -> "안개"
+                    51, 53, 55, 56, 57 -> "이슬비"
+                    61, 63, 65, 66, 67 -> "비"
+                    71, 73, 75, 77 -> "눈"
+                    80, 81, 82 -> "소나기"
+                    85, 86 -> "눈 소나기"
+                    95, 96, 99 -> "뇌우"
+                    else -> "날씨 정보"
+                }
+
+                val icon = when {
+                    code == 0 -> "☀️"
+                    code in listOf(1, 2, 3) -> "☁️"
+                    code in listOf(45, 48) -> "🌫️"
+                    code in listOf(71, 73, 75, 77, 85, 86) -> "❄️"
+                    code in listOf(95, 96, 99) -> "⛈️"
+                    code in listOf(
+                        51, 53, 55, 56, 57,
+                        61, 63, 65, 66, 67,
+                        80, 81, 82
+                    ) -> "🌧️"
+                    else -> "🌤️"
+                }
+
+                weatherLine =
+                    "$icon $description ${temperature}°C"
+
+            } finally {
+                connection.disconnect()
+            }
+
+        } catch (_: Exception) {
+        }
+
+        runOnUiThread {
+            if (::weatherText.isInitialized && !isFinishing) {
+                weatherText.text =
+                    "📍 $placeName\n$weatherLine"
+            }
+        }
+
+    }.start()
+}
+
+// 위치 권한 결과 확인
+override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<out String>,
+    grantResults: IntArray
+) {
+    super.onRequestPermissionsResult(
+        requestCode,
+        permissions,
+        grantResults
+    )
+
+    if (requestCode == LOCATION_PERMISSION_REQUEST) {
+        if (grantResults.any {
+                it == PackageManager.PERMISSION_GRANTED
+            }) {
+            loadWeatherForCurrentLocation()
+        } else if (::weatherText.isInitialized) {
+            weatherText.text = "📍 위치 권한이 필요합니다"
+        }
+    }
+}
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
     }
