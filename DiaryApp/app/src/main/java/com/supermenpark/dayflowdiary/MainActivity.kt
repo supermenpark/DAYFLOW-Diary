@@ -1219,7 +1219,8 @@ private fun loadWeatherForCurrentLocation() {
     }
 }
 
-// 현재 날씨 조회
+
+ // 현재 날씨 조회
 private fun fetchWeather(
     latitude: Double,
     longitude: Double
@@ -1228,9 +1229,10 @@ private fun fetchWeather(
 
     Thread {
         var placeName = "현재 위치"
-        var weatherLine = "날씨 정보를 가져오지 못했습니다"
+        var weatherLine = "날씨 조회 실패"
 
         try {
+            // 지역 이름 확인
             try {
                 val geocoder = Geocoder(this, Locale.KOREAN)
 
@@ -1242,15 +1244,19 @@ private fun fetchWeather(
                 )
 
                 if (!addresses.isNullOrEmpty()) {
+                    val address = addresses[0]
+
                     placeName =
-                        addresses[0].locality
-                            ?: addresses[0].subLocality
-                            ?: addresses[0].adminArea
+                        address.subLocality
+                            ?: address.locality
+                            ?: address.adminArea
                             ?: "현재 위치"
                 }
             } catch (_: Exception) {
+                placeName = "현재 위치"
             }
 
+            // 날씨 서버 접속
             val url = URL(
                 "https://api.open-meteo.com/v1/forecast" +
                 "?latitude=$latitude" +
@@ -1262,16 +1268,25 @@ private fun fetchWeather(
             val connection =
                 url.openConnection() as HttpURLConnection
 
-            connection.connectTimeout = 10000
-            connection.readTimeout = 10000
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.requestMethod = "GET"
 
             try {
-                val json = JSONObject(
+                val responseCode = connection.responseCode
+
+                if (responseCode != 200) {
+                    throw java.io.IOException(
+                        "서버 응답 오류: $responseCode"
+                    )
+                }
+
+                val response =
                     connection.inputStream.bufferedReader().use {
                         it.readText()
                     }
-                )
 
+                val json = JSONObject(response)
                 val current = json.getJSONObject("current")
 
                 val temperature =
@@ -1314,7 +1329,8 @@ private fun fetchWeather(
                 connection.disconnect()
             }
 
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            weatherLine = "날씨 조회 실패 (${e.message ?: "네트워크 확인"})"
         }
 
         runOnUiThread {
@@ -1326,6 +1342,7 @@ private fun fetchWeather(
 
     }.start()
 }
+
 
 // 위치 권한 결과 확인
 override fun onRequestPermissionsResult(
