@@ -1141,19 +1141,26 @@ loadWeatherForCurrentLocation()
             cornerRadius = dp(radius).toFloat()
         }
     }
-// 현재 위치 확인
+
+// 현재 위치 새로 확인
 private fun loadWeatherForCurrentLocation() {
     if (!::weatherText.isInitialized) return
 
     val granted = checkSelfPermission(
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED ||
+    checkSelfPermission(
         Manifest.permission.ACCESS_COARSE_LOCATION
     ) == PackageManager.PERMISSION_GRANTED
 
     if (!granted) {
-        weatherText.text = "📍 위치 권한 허용"
+        weatherText.text = "📍 위치 권한 허용 필요"
 
         requestPermissions(
-            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION),
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ),
             LOCATION_PERMISSION_REQUEST
         )
         return
@@ -1163,32 +1170,50 @@ private fun loadWeatherForCurrentLocation() {
         val manager =
             getSystemService(LOCATION_SERVICE) as LocationManager
 
-        var bestLocation: Location? = null
+        val provider = when {
+            manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ->
+                LocationManager.NETWORK_PROVIDER
 
-        for (provider in manager.getProviders(true)) {
-            val location = try {
-                manager.getLastKnownLocation(provider)
-            } catch (_: SecurityException) {
-                null
-            }
+            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ->
+                LocationManager.GPS_PROVIDER
 
-            if (location != null &&
-                (bestLocation == null ||
-                 location.accuracy < bestLocation!!.accuracy)
-            ) {
-                bestLocation = location
-            }
+            else -> null
         }
 
-        if (bestLocation != null) {
-            fetchWeather(
-                bestLocation!!.latitude,
-                bestLocation!!.longitude
-            )
-        } else {
-            weatherText.text = "📍 위치 정보 없음"
+        if (provider == null) {
+            weatherText.text = "📍 위치 서비스를 켜주세요."
+            return
         }
 
+        weatherText.text = "📍 현재 위치 확인 중…"
+
+        @Suppress("MissingPermission")
+        manager.requestSingleUpdate(
+            provider,
+            object : android.location.LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    fetchWeather(
+                        location.latitude,
+                        location.longitude
+                    )
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onStatusChanged(
+                    provider: String?,
+                    status: Int,
+                    extras: Bundle?
+                ) {}
+
+                override fun onProviderEnabled(provider: String) {}
+
+                override fun onProviderDisabled(provider: String) {}
+            },
+            mainLooper
+        )
+
+    } catch (_: SecurityException) {
+        weatherText.text = "📍 위치 권한을 확인해 주세요."
     } catch (_: Exception) {
         weatherText.text = "📍 위치 확인 실패"
     }
