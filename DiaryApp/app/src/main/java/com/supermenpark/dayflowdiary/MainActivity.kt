@@ -477,13 +477,37 @@ loadWeatherForCurrentLocation()
 
         target.addView(sheet, LinearLayout.LayoutParams(-1, -2))
 
+                val diaryHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
         val smallTitle = TextView(this).apply {
             text = "TODAY'S DIARY"
             textSize = 11f
             letterSpacing = 0.15f
             setTextColor(accent)
         }
-        sheet.addView(smallTitle)
+
+        diaryHeaderRow.addView(
+            smallTitle,
+            LinearLayout.LayoutParams(0, -2, 1f)
+        )
+
+        diaryWeatherText = TextView(this).apply {
+            text = "날씨 확인 중"
+            textSize = 12f
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            setTextColor(Color.GRAY)
+            maxLines = 1
+        }
+
+        diaryHeaderRow.addView(
+            diaryWeatherText,
+            LinearLayout.LayoutParams(-2, -2)
+        )
+
+        sheet.addView(diaryHeaderRow)
 
         dateText = TextView(this).apply {
             text = entry?.date ?: today()
