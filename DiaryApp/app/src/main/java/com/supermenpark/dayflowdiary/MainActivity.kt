@@ -151,7 +151,12 @@ private lateinit var weatherText: TextView
         }
 
         header.addView(shade, FrameLayout.LayoutParams(-1, -1))
-
+appContainer.addView(
+    header,
+    LinearLayout.LayoutParams(-1, dp(180)).apply {
+        setMargins(dp(18), dp(12), dp(18), dp(12))
+    }
+)
         
         // 지역·날씨 표시 영역
         weatherText = TextView(this).apply {
