@@ -151,64 +151,33 @@ private lateinit var weatherText: TextView
 
         header.addView(shade, FrameLayout.LayoutParams(-1, -1))
 
-        val logo = TextView(this).apply {
-            text = "나의 하루"
-            textSize = 27f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.create("serif", Typeface.BOLD)
-            setShadowLayer(5f, 0f, 2f, Color.BLACK)
+        
+        // 지역·날씨 표시 영역
+        weatherText = TextView(this).apply {
+            text = "📍 지역·날씨 확인"
+            textSize = 16f
+            setTextColor(Color.BLACK)
+            gravity = Gravity.CENTER
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setBackgroundColor(Color.rgb(220, 230, 210))
+            visibility = View.VISIBLE
+            minHeight = dp(55)
+
+            setOnClickListener {
+                loadWeatherForCurrentLocation()
+            }
         }
 
-        val logoParams = FrameLayout.LayoutParams(
-            -2, -2, Gravity.BOTTOM or Gravity.START
+        val weatherRowParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(55)
         )
-        logoParams.setMargins(dp(20), 0, dp(12), dp(19))
-        header.addView(logo, logoParams)
-
-        val history = TextView(this).apply {
-            text = "기록 보기  ›"
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            setPadding(dp(12), dp(9), dp(5), dp(9))
-            setOnClickListener { showHistory() }
-        }
-
-        val historyParams = FrameLayout.LayoutParams(
-            -2, -2, Gravity.TOP or Gravity.END
+        weatherRowParams.setMargins(
+            dp(18), dp(0), dp(18), dp(10)
         )
-        historyParams.setMargins(0, dp(10), dp(13), 0)
-        header.addView(history, historyParams)
-         // 배너 오른쪽 위 지역 및 날씨 표시
 
+        appContainer.addView(weatherText, weatherRowParams)
 
-// 배너 아래 지역·날씨 표시 버튼
-weatherText = TextView(this).apply {
-
-// 지역·날씨 표시 영역
-weatherText = TextView(this).apply {
-    text = "📍 지역·날씨 확인"
-    textSize = 16f
-    setTextColor(Color.BLACK)
-    gravity = Gravity.CENTER
-    setPadding(dp(12), dp(10), dp(12), dp(10))
-    setBackgroundColor(Color.rgb(220, 230, 210))
-    visibility = View.VISIBLE
-    minHeight = dp(55)
-
-    setOnClickListener {
-        loadWeatherForCurrentLocation()
-    }
-}
-
-val weatherRowParams = LinearLayout.LayoutParams(
-    LinearLayout.LayoutParams.MATCH_PARENT,
-    dp(55)
-)
-weatherRowParams.setMargins(
-    dp(18), dp(0), dp(18), dp(10)
-)
-
-appContainer.addView(weatherText, weatherRowParams)
 
         loadDailyBanner(bannerImage)
 loadWeatherForCurrentLocation()
