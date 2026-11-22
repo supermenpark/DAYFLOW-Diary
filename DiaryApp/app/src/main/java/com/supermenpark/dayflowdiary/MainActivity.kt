@@ -41,6 +41,7 @@ class MainActivity : Activity() {
     private val PHOTO_PICK_REQUEST = 410
 private val LOCATION_PERMISSION_REQUEST = 520
 private lateinit var weatherText: TextView
+    private lateinit var diaryWeatherText: TextView
     private lateinit var root: FrameLayout
     private lateinit var appContainer: LinearLayout
     private lateinit var drawerPanel: LinearLayout
