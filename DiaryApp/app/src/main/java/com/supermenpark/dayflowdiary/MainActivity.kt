@@ -183,27 +183,31 @@ private lateinit var weatherText: TextView
 
 // 배너 아래 지역·날씨 표시 버튼
 weatherText = TextView(this).apply {
+
+// 지역·날씨 표시 영역
+weatherText = TextView(this).apply {
     text = "📍 지역·날씨 확인"
-    textSize = 15f
-    setTextColor(Color.WHITE)
+    textSize = 16f
+    setTextColor(Color.BLACK)
     gravity = Gravity.CENTER
-    setPadding(dp(14), dp(12), dp(14), dp(12))
-    background = rounded(Color.rgb(115, 125, 104), 12)
-    isClickable = true
-    isFocusable = true
+    setPadding(dp(12), dp(10), dp(12), dp(10))
+    setBackgroundColor(Color.rgb(220, 230, 210))
+    visibility = View.VISIBLE
+    minHeight = dp(55)
 
     setOnClickListener {
         loadWeatherForCurrentLocation()
     }
 }
 
+val weatherRowParams = LinearLayout.LayoutParams(
+    LinearLayout.LayoutParams.MATCH_PARENT,
+    dp(55)
+)
+weatherRowParams.setMargins(
+    dp(18), dp(0), dp(18), dp(10)
+)
 
-        val headerParams = LinearLayout.LayoutParams(-1, dp(165))
-        headerParams.setMargins(dp(14), dp(12), dp(14), dp(12))
-        appContainer.addView(header, headerParams)
-
-val weatherRowParams = LinearLayout.LayoutParams(-1, -2)
-weatherRowParams.setMargins(dp(18), dp(0), dp(18), dp(10))
 appContainer.addView(weatherText, weatherRowParams)
 
         loadDailyBanner(bannerImage)
