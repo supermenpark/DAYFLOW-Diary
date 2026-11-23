@@ -1,3 +1,4 @@
+
 package com.supermenpark.dayflowdiary
 
 import android.app.Activity
@@ -152,25 +153,27 @@ class MainActivity : Activity() {
         }
 
         header.addView(shade, FrameLayout.LayoutParams(-1, -1))
-val bannerQuote = TextView(this).apply {
-    text = "오늘도 충분히 잘하고 있어."
-    textSize = 19f
-    setTextColor(Color.WHITE)
-    setTypeface(typeface, Typeface.BOLD)
-    gravity = Gravity.CENTER
-    setPadding(dp(24), dp(12), dp(24), dp(12))
-    maxLines = 2
-    setShadowLayer(5f, 1f, 2f, Color.BLACK)
-}
 
-header.addView(
-    bannerQuote,
-    FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT,
-        FrameLayout.LayoutParams.WRAP_CONTENT,
-        Gravity.CENTER
-    )
-)
+        val bannerQuote = TextView(this).apply {
+            text = dailyBannerQuote()
+            textSize = 19f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(12), dp(24), dp(12))
+            maxLines = 2
+            setShadowLayer(5f, 1f, 2f, Color.BLACK)
+        }
+
+        header.addView(
+            bannerQuote,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
+        )
+
         appContainer.addView(
             header,
             LinearLayout.LayoutParams(-1, dp(180)).apply {
@@ -178,31 +181,11 @@ header.addView(
             }
         )
 
-        // 배너 사진과 분리된 지역·날씨 표시 영역
+        // 화면에는 표시하지 않는 날씨 갱신용 뷰
+        // 날씨는 다이어리 우측 상단에만 표시
         weatherText = TextView(this).apply {
             text = "📍 지역·날씨 확인"
-            textSize = 15f
-            setTextColor(ink)
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-            visibility = View.VISIBLE
-            minHeight = dp(42)
-            maxLines = 2
-            setOnClickListener {
-                loadWeatherForCurrentLocation()
-            }
         }
-
-        val weatherRowParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            dp(42)
-        )
-
-        weatherRowParams.setMargins(
-            dp(18), dp(0), dp(18), dp(10)
-        )
-
-        appContainer.addView(weatherText, weatherRowParams)
 
         loadDailyBanner(bannerImage)
         loadWeatherForCurrentLocation()
@@ -225,7 +208,9 @@ header.addView(
                 textSize = 12f
                 gravity = Gravity.CENTER
                 setPadding(dp(10), dp(12), dp(10), dp(12))
-                setTextColor(if (currentMode == index) Color.WHITE else accent)
+                setTextColor(
+                    if (currentMode == index) Color.WHITE else accent
+                )
                 background = rounded(
                     if (currentMode == index) accent else paper,
                     12
@@ -269,6 +254,143 @@ header.addView(
         buildDrawer()
     }
 
+    // 매일 바뀌는 응원 문구
+    private fun dailyBannerQuote(): String {
+        val quotes = listOf(
+            "오늘도 충분히 잘하고 있어.",
+            "천천히 가도 괜찮아. 멈추지만 않으면 돼.",
+            "오늘의 작은 걸음이 내일을 바꿔.",
+            "너의 하루는 그 자체로 소중해.",
+            "잘하려 애쓴 오늘, 그것만으로 충분해.",
+            "좋은 일은 생각보다 가까이에 있어.",
+            "오늘도 너답게, 편안하게.",
+            "지금까지 잘 버텨왔고 앞으로도 잘할 거야.",
+            "작은 행복을 놓치지 않는 하루가 되길.",
+            "오늘은 어제보다 조금 더 웃어보자.",
+            "새로운 하루에는 새로운 기회가 있어.",
+            "오늘도 네 편이 되어주자.",
+            "조금 느려도 괜찮아. 잘 가고 있어.",
+            "마음 편한 하루가 가장 좋은 하루야.",
+            "언젠가 오늘을 웃으며 이야기할 거야."
+        )
+
+        val todayKey =
+            SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+
+        val savedDate = prefs.getString("banner_quote_date", "")
+
+        val index = if (savedDate == todayKey) {
+            prefs.getInt("banner_quote_index", 0)
+                .coerceIn(quotes.indices)
+        } else {
+            val previous = prefs.getInt("banner_quote_index", -1)
+            var next = Random.nextInt(quotes.size)
+
+            if (quotes.size > 1 && next == previous) {
+                next = (next + 1) % quotes.size
+            }
+
+            prefs.edit()
+                .putString("banner_quote_date", todayKey)
+                .putInt("banner_quote_index", next)
+                .apply()
+
+            next
+        }
+
+        return quotes[index]
+    }
+
+    // 매일 바뀌는 자연 풍경 배경
+    private fun loadDailyBanner(target: ImageView) {
+
+        val imageUrls = listOf(
+            // 산과 호수
+            "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop",
+
+            // 호수와 산 풍경
+            "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1200&auto=format&fit=crop",
+
+            // 울창한 숲
+            "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&auto=format&fit=crop",
+
+            // 햇살이 비치는 자연
+            "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1200&auto=format&fit=crop",
+
+            // 바다 풍경
+            "https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1200&auto=format&fit=crop",
+
+            // 웅장한 산맥
+            "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&auto=format&fit=crop",
+
+            // 초원과 자연
+            "https://images.unsplash.com/photo-1500534623283-312aade485b7?w=1200&auto=format&fit=crop",
+
+            // 아름다운 자연 풍경
+            "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop"
+        )
+
+        val todayKey =
+            SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+
+        val savedDate = prefs.getString("banner_date", "")
+
+        val imageIndex = if (savedDate == todayKey) {
+
+            prefs.getInt("banner_index", 0)
+                .coerceIn(imageUrls.indices)
+
+        } else {
+
+            val previous = prefs.getInt("banner_index", -1)
+            var next = Random.nextInt(imageUrls.size)
+
+            if (imageUrls.size > 1 && next == previous) {
+                next = (next + 1) % imageUrls.size
+            }
+
+            prefs.edit()
+                .putString("banner_date", todayKey)
+                .putInt("banner_index", next)
+                .apply()
+
+            next
+        }
+
+        Thread {
+            var connection: HttpURLConnection? = null
+
+            try {
+                connection =
+                    URL(imageUrls[imageIndex])
+                        .openConnection() as HttpURLConnection
+
+                connection.connectTimeout = 10000
+                connection.readTimeout = 15000
+                connection.requestMethod = "GET"
+                connection.connect()
+
+                val bitmap = connection.inputStream.use {
+                    BitmapFactory.decodeStream(it)
+                }
+
+                if (bitmap != null) {
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) {
+                            target.setImageBitmap(bitmap)
+                        }
+                    }
+                }
+
+            } catch (_: Exception) {
+                // 사진 로딩 실패 시 기본 배경 유지
+            } finally {
+                connection?.disconnect()
+            }
+
+        }.start()
+    }
+
     // 슬라이드 메뉴
     private fun buildDrawer() {
         scrim = View(this).apply {
@@ -303,13 +425,19 @@ header.addView(
             setPadding(0, dp(15), 0, dp(35))
         }
 
-        drawerPanel.addView(brand, LinearLayout.LayoutParams(-1, -2))
+        drawerPanel.addView(
+            brand,
+            LinearLayout.LayoutParams(-1, -2)
+        )
 
         val line = View(this).apply {
             setBackgroundColor(Color.rgb(110, 116, 105))
         }
 
-        drawerPanel.addView(line, LinearLayout.LayoutParams(-1, dp(1)))
+        drawerPanel.addView(
+            line,
+            LinearLayout.LayoutParams(-1, dp(1))
+        )
 
         addDrawerItem("⌂", "일기 쓰기", 0)
         addDrawerItem("▤", "세로 메모지", 1)
@@ -381,14 +509,19 @@ header.addView(
         }
 
         val handleParams = FrameLayout.LayoutParams(
-            dp(25), dp(76), Gravity.START or Gravity.CENTER_VERTICAL
+            dp(25), dp(76),
+            Gravity.START or Gravity.CENTER_VERTICAL
         )
 
         root.addView(menuHandle, handleParams)
         menuHandle.translationX = 0f
     }
 
-    private fun addDrawerItem(icon: String, name: String, mode: Int) {
+    private fun addDrawerItem(
+        icon: String,
+        name: String,
+        mode: Int
+    ) {
         val item = TextView(this).apply {
             text = "$icon    $name"
             textSize = 16f
@@ -449,75 +582,17 @@ header.addView(
         scrim.animate()
             .alpha(0f)
             .setDuration(220)
-            .withEndAction { scrim.visibility = View.GONE }
+            .withEndAction {
+                scrim.visibility = View.GONE
+            }
             .start()
     }
 
-    // 날짜별 배경 사진
-    private fun loadDailyBanner(target: ImageView) {
-        val imageUrls = listOf(
-            "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1200&auto=format&fit=crop",
-            "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop",
-            "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1200&auto=format&fit=crop",
-            "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&auto=format&fit=crop",
-            "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop",
-            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200&auto=format&fit=crop"
-        )
-
-        val todayKey = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-        val savedDate = prefs.getString("banner_date", "")
-
-        val imageIndex = if (savedDate == todayKey) {
-            prefs.getInt("banner_index", 0).coerceIn(imageUrls.indices)
-        } else {
-            val previous = prefs.getInt("banner_index", -1)
-            var next = Random.nextInt(imageUrls.size)
-
-            if (imageUrls.size > 1 && next == previous) {
-                next = (next + 1) % imageUrls.size
-            }
-
-            prefs.edit()
-                .putString("banner_date", todayKey)
-                .putInt("banner_index", next)
-                .apply()
-
-            next
-        }
-
-        Thread {
-            var connection: HttpURLConnection? = null
-
-            try {
-                connection =
-                    URL(imageUrls[imageIndex]).openConnection() as HttpURLConnection
-
-                connection.connectTimeout = 10000
-                connection.readTimeout = 15000
-                connection.requestMethod = "GET"
-                connection.connect()
-
-                val bitmap = connection.inputStream.use {
-                    BitmapFactory.decodeStream(it)
-                }
-
-                if (bitmap != null) {
-                    runOnUiThread {
-                        if (!isFinishing && !isDestroyed) {
-                            target.setImageBitmap(bitmap)
-                        }
-                    }
-                }
-            } catch (_: Exception) {
-                // 사진을 불러오지 못하면 기본 배경 유지
-            } finally {
-                connection?.disconnect()
-            }
-        }.start()
-    }
-
     // 일기 화면
-    private fun buildDiary(target: LinearLayout, entry: DiaryEntry? = null) {
+    private fun buildDiary(
+        target: LinearLayout,
+        entry: DiaryEntry? = null
+    ) {
         target.removeAllViews()
         selectedId = entry?.id
 
@@ -528,7 +603,10 @@ header.addView(
             elevation = dp(3).toFloat()
         }
 
-        target.addView(sheet, LinearLayout.LayoutParams(-1, -2))
+        target.addView(
+            sheet,
+            LinearLayout.LayoutParams(-1, -2)
+        )
 
         val diaryHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -547,6 +625,7 @@ header.addView(
             LinearLayout.LayoutParams(0, -2, 1f)
         )
 
+        // 날씨는 이 위치에만 표시
         diaryWeatherText = TextView(this).apply {
             text = "📍 지역 확인 중 · 날씨 확인 중"
             textSize = 12f
@@ -589,7 +668,10 @@ header.addView(
             setBackgroundColor(Color.rgb(225, 220, 207))
         }
 
-        sheet.addView(divider, LinearLayout.LayoutParams(-1, dp(1)))
+        sheet.addView(
+            divider,
+            LinearLayout.LayoutParams(-1, dp(1))
+        )
 
         bodyInput = EditText(this).apply {
             hint = "오늘 있었던 일들을 자유롭게 적어보세요.\n\n기억하고 싶은 순간도 좋고,\n마음속에 담아둔 이야기도 좋습니다.\n\n이곳은 나만의 작은 기록 공간입니다."
@@ -612,10 +694,15 @@ header.addView(
             textSize = 16f
             setTextColor(Color.WHITE)
             background = rounded(accent, 10)
-            setOnClickListener { saveDiary() }
+            setOnClickListener {
+                saveDiary()
+            }
         }
 
-        sheet.addView(save, LinearLayout.LayoutParams(-1, dp(52)))
+        sheet.addView(
+            save,
+            LinearLayout.LayoutParams(-1, dp(52))
+        )
 
         val newDiary = TextView(this).apply {
             text = "+ 새 일기 쓰기"
@@ -623,7 +710,9 @@ header.addView(
             gravity = Gravity.CENTER
             setTextColor(accent)
             setPadding(dp(10), dp(22), dp(10), dp(15))
-            setOnClickListener { buildDiary(target) }
+            setOnClickListener {
+                buildDiary(target)
+            }
         }
 
         target.addView(newDiary)
@@ -635,7 +724,11 @@ header.addView(
         val body = bodyInput.text.toString().trim()
 
         if (title.isEmpty() && body.isEmpty()) {
-            Toast.makeText(this, "내용을 입력해 주세요.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                "내용을 입력해 주세요.",
+                Toast.LENGTH_SHORT
+            ).show()
             return
         }
 
@@ -659,7 +752,11 @@ header.addView(
         persistEntries()
         selectedId = id
 
-        Toast.makeText(this, "일기가 저장되었습니다.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            this,
+            "일기가 저장되었습니다.",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     // 메모 모아보기
@@ -779,7 +876,7 @@ header.addView(
             val body = TextView(this).apply {
                 text = entry.body.ifBlank { "내용 없음" }
                 textSize = 13f
-                                setTextColor(ink)
+                setTextColor(ink)
                 maxLines = if (sticky) 7 else 12
                 setLineSpacing(dp(3).toFloat(), 1f)
             }
@@ -1287,6 +1384,7 @@ header.addView(
 
         if (!granted) {
             weatherText.text = "📍 위치 권한 허용 필요"
+
             if (::diaryWeatherText.isInitialized) {
                 diaryWeatherText.text = "📍 위치 권한 허용 필요"
             }
@@ -1318,6 +1416,7 @@ header.addView(
 
             if (provider == null) {
                 weatherText.text = "📍 위치 서비스를 켜주세요."
+
                 if (::diaryWeatherText.isInitialized) {
                     diaryWeatherText.text = "📍 위치 서비스를 켜주세요."
                 }
@@ -1358,11 +1457,14 @@ header.addView(
 
         } catch (_: SecurityException) {
             weatherText.text = "📍 위치 권한을 확인해 주세요."
+
             if (::diaryWeatherText.isInitialized) {
                 diaryWeatherText.text = "📍 위치 권한을 확인해 주세요."
             }
+
         } catch (_: Exception) {
             weatherText.text = "📍 위치 확인 실패"
+
             if (::diaryWeatherText.isInitialized) {
                 diaryWeatherText.text = "📍 위치 확인 실패"
             }
@@ -1531,6 +1633,7 @@ header.addView(
 
             } else if (::weatherText.isInitialized) {
                 weatherText.text = "📍 위치 권한이 필요합니다"
+
                 if (::diaryWeatherText.isInitialized) {
                     diaryWeatherText.text = "📍 위치 권한이 필요합니다"
                 }
