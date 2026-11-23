@@ -1,4 +1,3 @@
-
 package com.supermenpark.dayflowdiary
 
 import android.app.Activity
@@ -166,11 +165,10 @@ class MainActivity : Activity() {
             text = "📍 지역·날씨 확인"
             textSize = 15f
             setTextColor(ink)
-            gravity = Gravity.CENTER
-            setPadding(dp(12), dp(8), dp(12), dp(8))
-            background = rounded(Color.rgb(232, 236, 222), 12)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
             visibility = View.VISIBLE
-            minHeight = dp(65)
+            minHeight = dp(42)
             maxLines = 2
             setOnClickListener {
                 loadWeatherForCurrentLocation()
@@ -179,7 +177,7 @@ class MainActivity : Activity() {
 
         val weatherRowParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
-            dp(65)
+            dp(42)
         )
 
         weatherRowParams.setMargins(
@@ -532,11 +530,11 @@ class MainActivity : Activity() {
         )
 
         diaryWeatherText = TextView(this).apply {
-            text = "날씨 확인 중"
+            text = "📍 지역 확인 중 · 날씨 확인 중"
             textSize = 12f
             gravity = Gravity.CENTER_VERTICAL or Gravity.END
             setTextColor(Color.GRAY)
-            maxLines = 1
+            maxLines = 2
         }
 
         diaryHeaderRow.addView(
@@ -763,7 +761,7 @@ class MainActivity : Activity() {
             val body = TextView(this).apply {
                 text = entry.body.ifBlank { "내용 없음" }
                 textSize = 13f
-                setTextColor(ink)
+                                setTextColor(ink)
                 maxLines = if (sticky) 7 else 12
                 setLineSpacing(dp(3).toFloat(), 1f)
             }
@@ -1271,6 +1269,9 @@ class MainActivity : Activity() {
 
         if (!granted) {
             weatherText.text = "📍 위치 권한 허용 필요"
+            if (::diaryWeatherText.isInitialized) {
+                diaryWeatherText.text = "📍 위치 권한 허용 필요"
+            }
 
             requestPermissions(
                 arrayOf(
@@ -1299,13 +1300,16 @@ class MainActivity : Activity() {
 
             if (provider == null) {
                 weatherText.text = "📍 위치 서비스를 켜주세요."
+                if (::diaryWeatherText.isInitialized) {
+                    diaryWeatherText.text = "📍 위치 서비스를 켜주세요."
+                }
                 return
             }
 
             weatherText.text = "📍 현재 위치 확인 중…"
 
             if (::diaryWeatherText.isInitialized) {
-                diaryWeatherText.text = "날씨 확인 중"
+                diaryWeatherText.text = "📍 현재 위치 확인 중…"
             }
 
             @Suppress("MissingPermission")
@@ -1336,8 +1340,14 @@ class MainActivity : Activity() {
 
         } catch (_: SecurityException) {
             weatherText.text = "📍 위치 권한을 확인해 주세요."
+            if (::diaryWeatherText.isInitialized) {
+                diaryWeatherText.text = "📍 위치 권한을 확인해 주세요."
+            }
         } catch (_: Exception) {
             weatherText.text = "📍 위치 확인 실패"
+            if (::diaryWeatherText.isInitialized) {
+                diaryWeatherText.text = "📍 위치 확인 실패"
+            }
         }
     }
 
@@ -1351,7 +1361,7 @@ class MainActivity : Activity() {
         }
 
         if (::diaryWeatherText.isInitialized) {
-            diaryWeatherText.text = "날씨 확인 중"
+            diaryWeatherText.text = "📍 날씨 불러오는 중…"
         }
 
         Thread {
@@ -1473,7 +1483,7 @@ class MainActivity : Activity() {
                     }
 
                     if (::diaryWeatherText.isInitialized) {
-                        diaryWeatherText.text = weatherLine
+                        diaryWeatherText.text = displayText
                     }
                 }
             }
@@ -1503,6 +1513,9 @@ class MainActivity : Activity() {
 
             } else if (::weatherText.isInitialized) {
                 weatherText.text = "📍 위치 권한이 필요합니다"
+                if (::diaryWeatherText.isInitialized) {
+                    diaryWeatherText.text = "📍 위치 권한이 필요합니다"
+                }
             }
         }
     }
