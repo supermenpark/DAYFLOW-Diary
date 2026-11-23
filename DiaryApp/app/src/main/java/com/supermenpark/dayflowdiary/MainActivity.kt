@@ -1,4 +1,3 @@
-
 package com.supermenpark.dayflowdiary
 
 import android.app.Activity
@@ -28,6 +27,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.random.Random
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 class MainActivity : Activity() {
 
@@ -41,6 +44,8 @@ class MainActivity : Activity() {
 
     private val PHOTO_PICK_REQUEST = 410
     private val LOCATION_PERMISSION_REQUEST = 520
+    private val BACKUP_CREATE_REQUEST = 610
+    private val BACKUP_RESTORE_REQUEST = 611
 
     private lateinit var weatherText: TextView
     private lateinit var diaryWeatherText: TextView
@@ -305,28 +310,13 @@ class MainActivity : Activity() {
     private fun loadDailyBanner(target: ImageView) {
 
         val imageUrls = listOf(
-            // 산과 호수
             "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop",
-
-            // 호수와 산 풍경
             "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1200&auto=format&fit=crop",
-
-            // 울창한 숲
             "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&auto=format&fit=crop",
-
-            // 햇살이 비치는 자연
             "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1200&auto=format&fit=crop",
-
-            // 바다 풍경
             "https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1200&auto=format&fit=crop",
-
-            // 웅장한 산맥
             "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&auto=format&fit=crop",
-
-            // 초원과 자연
             "https://images.unsplash.com/photo-1500534623283-312aade485b7?w=1200&auto=format&fit=crop",
-
-            // 아름다운 자연 풍경
             "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop"
         )
 
@@ -336,12 +326,9 @@ class MainActivity : Activity() {
         val savedDate = prefs.getString("banner_date", "")
 
         val imageIndex = if (savedDate == todayKey) {
-
             prefs.getInt("banner_index", 0)
                 .coerceIn(imageUrls.indices)
-
         } else {
-
             val previous = prefs.getInt("banner_index", -1)
             var next = Random.nextInt(imageUrls.size)
 
@@ -443,6 +430,25 @@ class MainActivity : Activity() {
         addDrawerItem("▤", "세로 메모지", 1)
         addDrawerItem("▧", "포스트잇 모아보기", 2)
         addDrawerItem("▣", "사진첩", 3)
+
+        // 새 백업·복원 메뉴
+        val backupItem = TextView(this).apply {
+            text = "⇅    데이터 백업 · 복원"
+            textSize = 15f
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(Color.WHITE)
+            setPadding(dp(15), 0, dp(8), 0)
+            background = rounded(drawerColor, 12)
+
+            setOnClickListener {
+                closeDrawer()
+                showBackupRestoreDialog()
+            }
+        }
+
+        val backupParams = LinearLayout.LayoutParams(-1, dp(57))
+        backupParams.setMargins(0, dp(7), 0, dp(7))
+        drawerPanel.addView(backupItem, backupParams)
 
         val historyItem = TextView(this).apply {
             text = "▣    기록 보기"
@@ -586,9 +592,7 @@ class MainActivity : Activity() {
                 scrim.visibility = View.GONE
             }
             .start()
-    }
-
-    // 일기 화면
+    }    // 일기 화면
     private fun buildDiary(
         target: LinearLayout,
         entry: DiaryEntry? = null
@@ -625,7 +629,6 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, -2, 1f)
         )
 
-        // 날씨는 이 위치에만 표시
         diaryWeatherText = TextView(this).apply {
             text = "📍 지역 확인 중 · 날씨 확인 중"
             textSize = 12f
@@ -1118,11 +1121,27 @@ class MainActivity : Activity() {
     ) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (
-            requestCode != PHOTO_PICK_REQUEST ||
-            resultCode != RESULT_OK ||
-            data == null
-        ) return
+        if (resultCode != RESULT_OK || data?.data == null) return
+
+        val uri = data.data!!
+
+        when (requestCode) {
+            BACKUP_CREATE_REQUEST -> {
+                createDiaryBackup(uri)
+                return
+            }
+
+            BACKUP_RESTORE_REQUEST -> {
+                restoreDiaryBackup(uri)
+                return
+            }
+
+            PHOTO_PICK_REQUEST -> {
+                // 기존 사진 선택 기능 유지
+            }
+
+            else -> return
+        }
 
         val picked = mutableListOf<Uri>()
 
@@ -1133,12 +1152,12 @@ class MainActivity : Activity() {
         }
 
         if (picked.isEmpty()) {
-            data.data?.let { picked.add(it) }
+            picked.add(uri)
         }
 
         var added = 0
 
-        picked.forEach { uri ->
+        picked.forEach { photoUri ->
             try {
                 val folder = java.io.File(filesDir, "diary_photos")
 
@@ -1147,7 +1166,7 @@ class MainActivity : Activity() {
                 }
 
                 val extension = when (
-                    contentResolver.getType(uri)?.lowercase(Locale.ROOT)
+                    contentResolver.getType(photoUri)?.lowercase(Locale.ROOT)
                 ) {
                     "image/png" -> ".png"
                     "image/webp" -> ".webp"
@@ -1160,7 +1179,7 @@ class MainActivity : Activity() {
                     "photo_${System.currentTimeMillis()}_${Random.nextInt(100000)}$extension"
                 )
 
-                val copied = contentResolver.openInputStream(uri)?.use { input ->
+                val copied = contentResolver.openInputStream(photoUri)?.use { input ->
                     destination.outputStream().use { output ->
                         input.copyTo(output)
                     }
@@ -1256,7 +1275,7 @@ class MainActivity : Activity() {
             .show()
     }
 
-    // 사진첩은 일기 데이터와 별도로 저장
+    // 사진첩은 기존 저장 방식 그대로 유지
     private fun loadPhotos() {
         photoUris.clear()
 
@@ -1338,7 +1357,7 @@ class MainActivity : Activity() {
         }
     }
 
-    // 일기 저장 데이터 유지
+    // 기존 일기 저장 구조 유지
     private fun persistEntries() {
         val array = JSONArray()
 
@@ -1354,6 +1373,262 @@ class MainActivity : Activity() {
         }
 
         prefs.edit().putString("entries", array.toString()).apply()
+    }
+
+    // 백업 및 복원 메뉴
+    private fun showBackupRestoreDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("DAYFLOW 데이터 관리")
+            .setItems(
+                arrayOf(
+                    "일기와 사진 백업하기",
+                    "백업 파일 복원하기"
+                )
+            ) { _, which ->
+                if (which == 0) {
+                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/zip"
+                        putExtra(
+                            Intent.EXTRA_TITLE,
+                            "DAYFLOW_Backup_${System.currentTimeMillis()}.zip"
+                        )
+                    }
+
+                    startActivityForResult(
+                        intent,
+                        BACKUP_CREATE_REQUEST
+                    )
+                } else {
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/zip"
+                    }
+
+                    startActivityForResult(
+                        intent,
+                        BACKUP_RESTORE_REQUEST
+                    )
+                }
+            }
+            .setNegativeButton("닫기", null)
+            .show()
+    }
+
+    // 일기와 사진을 ZIP 파일로 백업
+    private fun createDiaryBackup(uri: Uri) {
+        try {
+            val manifest = JSONObject()
+            val diaryArray = JSONArray()
+            val photoArray = JSONArray()
+
+            entries.forEach { entry ->
+                diaryArray.put(
+                    JSONObject().apply {
+                        put("id", entry.id)
+                        put("date", entry.date)
+                        put("title", entry.title)
+                        put("body", entry.body)
+                    }
+                )
+            }
+
+            val existingPhotos = mutableListOf<java.io.File>()
+
+            photoUris.forEach { photo ->
+                val path = Uri.parse(photo).path ?: return@forEach
+                val file = java.io.File(path)
+
+                if (file.exists() && file.isFile) {
+                    photoArray.put(file.name)
+                    existingPhotos.add(file)
+                }
+            }
+
+            manifest.put("format", "DAYFLOW_DIARY_BACKUP_1")
+            manifest.put("entries", diaryArray)
+            manifest.put("photos", photoArray)
+
+            contentResolver.openOutputStream(uri)?.use { output ->
+                ZipOutputStream(output).use { zip ->
+
+                    zip.putNextEntry(ZipEntry("backup.json"))
+                    zip.write(manifest.toString().toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+
+                    existingPhotos.forEach { file ->
+                        zip.putNextEntry(
+                            ZipEntry("photos/${file.name}")
+                        )
+
+                        file.inputStream().use { input ->
+                            input.copyTo(zip)
+                        }
+
+                        zip.closeEntry()
+                    }
+                }
+            } ?: throw Exception("백업 파일을 만들 수 없습니다.")
+
+            Toast.makeText(
+                this,
+                "일기 ${entries.size}개와 사진 ${existingPhotos.size}장을 백업했습니다.",
+                Toast.LENGTH_LONG
+            ).show()
+
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "백업 실패: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    // 백업 파일을 검사한 뒤 기존 기록에 추가 복원
+    private fun restoreDiaryBackup(uri: Uri) {
+        val extractedFiles = mutableListOf<java.io.File>()
+
+        try {
+            val zipContents = mutableMapOf<String, ByteArray>()
+
+            contentResolver.openInputStream(uri)?.use { input ->
+                ZipInputStream(input).use { zip ->
+                    var entry = zip.nextEntry
+
+                    while (entry != null) {
+                        if (!entry.isDirectory) {
+                            val name = entry.name
+
+                            if (
+                                name == "backup.json" ||
+                                (
+                                    name.startsWith("photos/") &&
+                                    name.substringAfterLast('/').isNotBlank()
+                                )
+                            ) {
+                                val output = ByteArrayOutputStream()
+                                zip.copyTo(output)
+                                zipContents[name] = output.toByteArray()
+                            }
+                        }
+
+                        zip.closeEntry()
+                        entry = zip.nextEntry
+                    }
+                }
+            } ?: throw Exception("백업 파일을 읽을 수 없습니다.")
+
+            val manifestBytes = zipContents["backup.json"]
+                ?: throw Exception("백업 정보가 없습니다.")
+
+            val manifest = JSONObject(
+                String(manifestBytes, Charsets.UTF_8)
+            )
+
+            if (
+                manifest.optString("format") !=
+                "DAYFLOW_DIARY_BACKUP_1"
+            ) {
+                throw Exception("DAYFLOW 백업 파일이 아닙니다.")
+            }
+
+            val diaryArray =
+                manifest.optJSONArray("entries") ?: JSONArray()
+
+            val folder = java.io.File(filesDir, "diary_photos")
+
+            if (!folder.exists() && !folder.mkdirs()) {
+                throw Exception("사진 저장 폴더를 만들 수 없습니다.")
+            }
+
+            // 사진 파일을 기존 파일과 겹치지 않는 이름으로 저장
+            val restoredPhotoUris = mutableListOf<String>()
+
+            zipContents.forEach { (name, bytes) ->
+                if (name.startsWith("photos/")) {
+                    val originalName = name.substringAfterLast('/')
+
+                    if (originalName.isBlank()) return@forEach
+
+                    val extension = originalName.substringAfterLast(
+                        ".",
+                        "jpg"
+                    ).take(8)
+
+                    val destination = java.io.File(
+                        folder,
+                        "restored_${System.currentTimeMillis()}_${Random.nextInt(100000)}.$extension"
+                    )
+
+                    destination.writeBytes(bytes)
+
+                    if (
+                        destination.exists() &&
+                        destination.length() > 0L
+                    ) {
+                        extractedFiles.add(destination)
+                        restoredPhotoUris.add(
+                            Uri.fromFile(destination).toString()
+                        )
+                    }
+                }
+            }
+
+            // 기존 일기는 덮어쓰지 않고 없는 ID만 추가
+            var addedEntries = 0
+
+            for (i in 0 until diaryArray.length()) {
+                val item = diaryArray.getJSONObject(i)
+                val id = item.getLong("id")
+
+                if (entries.none { it.id == id }) {
+                    entries.add(
+                        DiaryEntry(
+                            id = id,
+                            date = item.optString("date"),
+                            title = item.optString("title"),
+                            body = item.optString("body")
+                        )
+                    )
+
+                    addedEntries++
+                }
+            }
+
+            // 기존 사진 목록도 유지하면서 복원 사진 추가
+            restoredPhotoUris.forEach { photo ->
+                if (!photoUris.contains(photo)) {
+                    photoUris.add(photo)
+                }
+            }
+
+            persistEntries()
+            savePhotos()
+
+            Toast.makeText(
+                this,
+                "복원 완료\n일기 ${addedEntries}개 추가\n사진 ${restoredPhotoUris.size}장 추가",
+                Toast.LENGTH_LONG
+            ).show()
+
+            showScreen()
+
+        } catch (e: Exception) {
+            // 복원 실패 시 이번 작업에서 만든 파일만 정리
+            extractedFiles.forEach { file ->
+                try {
+                    file.delete()
+                } catch (_: Exception) {
+                }
+            }
+
+            Toast.makeText(
+                this,
+                "복원 실패: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun today(): String {
@@ -1489,7 +1764,6 @@ class MainActivity : Activity() {
             var weatherLine = "날씨 조회 실패"
 
             try {
-                // 지역 이름 확인
                 try {
                     val geocoder = Geocoder(this, Locale.KOREAN)
 
@@ -1514,7 +1788,6 @@ class MainActivity : Activity() {
                     placeName = "현재 위치"
                 }
 
-                // 날씨 서버 접속
                 val url = URL(
                     "https://api.open-meteo.com/v1/forecast" +
                         "?latitude=$latitude" +
