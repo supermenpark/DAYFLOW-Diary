@@ -152,7 +152,25 @@ class MainActivity : Activity() {
         }
 
         header.addView(shade, FrameLayout.LayoutParams(-1, -1))
+val bannerQuote = TextView(this).apply {
+    text = "오늘도 충분히 잘하고 있어."
+    textSize = 19f
+    setTextColor(Color.WHITE)
+    setTypeface(typeface, Typeface.BOLD)
+    gravity = Gravity.CENTER
+    setPadding(dp(24), dp(12), dp(24), dp(12))
+    maxLines = 2
+    setShadowLayer(5f, 1f, 2f, Color.BLACK)
+}
 
+header.addView(
+    bannerQuote,
+    FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.WRAP_CONTENT,
+        Gravity.CENTER
+    )
+)
         appContainer.addView(
             header,
             LinearLayout.LayoutParams(-1, dp(180)).apply {
