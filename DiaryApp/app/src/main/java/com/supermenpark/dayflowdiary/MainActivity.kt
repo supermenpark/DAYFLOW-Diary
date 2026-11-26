@@ -1295,7 +1295,6 @@ class MainActivity : Activity() {
             for (i in 0 until data.length()) {
                 photoUris.add(data.getString(i))
             }
-
         } catch (_: Exception) {
             photoUris.clear()
         }
@@ -1307,6 +1306,9 @@ class MainActivity : Activity() {
         photoUris.forEach {
             array.put(it)
         }
-                photoUris.forEach {
-            array.put(it)
-                }
+
+        prefs.edit()
+            .putString("photos", array.toString())
+            .apply()
+    }
+}
