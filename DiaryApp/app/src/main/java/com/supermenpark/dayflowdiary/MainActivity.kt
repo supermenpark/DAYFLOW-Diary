@@ -1310,5 +1310,223 @@ class MainActivity : Activity() {
         prefs.edit()
             .putString("photos", array.toString())
             .apply()
+            
+    // 일기 데이터 불러오기
+    private fun loadEntries() {
+        entries.clear()
+        try {
+            val data = JSONArray(prefs.getString("entries", "[]"))
+            for (i in 0 until data.length()) {
+                val item = data.getJSONObject(i)
+                entries.add(
+                    DiaryEntry(
+                        item.optLong("id"),
+                        item.optString("date"),
+                        item.optString("title"),
+                        item.optString("body")
+                    )
+                )
+            }
+            entries.sortByDescending { it.id }
+        } catch (_: Exception) {
+            entries.clear()
+        }
+    }
+
+    // 일기 데이터 저장
+    private fun persistEntries() {
+        val data = JSONArray()
+        entries.forEach { entry ->
+            data.put(JSONObject().apply {
+                put("id", entry.id)
+                put("date", entry.date)
+                put("title", entry.title)
+                put("body", entry.body)
+            })
+        }
+        prefs.edit().putString("entries", data.toString()).apply()
+    }
+
+    private fun today(): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
+
+    private fun rounded(color: Int, radius: Int): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+        }
+
+    private fun diaryStreakMessage(): String {
+        if (entries.isEmpty()) return "오늘의 기록을 시작해 보세요."
+        return "오늘도 소중한 하루를 기록해 보세요."
+    }
+
+    private fun showHistory() {
+        currentMode = 0
+        showScreen()
+        content.removeAllViews()
+
+        content.addView(TextView(this).apply {
+            text = "기록 보기"
+            textSize = 23f
+            setTextColor(ink)
+        })
+
+        entries.forEach { entry ->
+            content.addView(TextView(this).apply {
+                text = "${entry.date}\n${entry.title}\n${entry.body.take(100)}"
+                textSize = 15f
+                setTextColor(ink)
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                background = rounded(paper, 10)
+                setOnClickListener { buildDiary(content, entry) }
+            }, LinearLayout.LayoutParams(-1, -2).apply {
+                setMargins(0, 0, 0, dp(10))
+            })
+        }
+    }
+
+    private fun loadWeatherForCurrentLocation() {
+        if (::diaryWeatherText.isInitialized) {
+            diaryWeatherText.text = "📍 지역·날씨 확인 중"
+        }
+    }
+
+    private fun showBackupRestoreDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("데이터 백업 · 복원")
+            .setMessage("일기와 사진을 백업하거나 복원합니다.")
+            .setPositiveButton("백업하기") { _, _ ->
+                startActivityForResult(
+                    Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/zip"
+                        putExtra(Intent.EXTRA_TITLE, "DAYFLOW_Diary_Backup.zip")
+                    },
+                    BACKUP_CREATE_REQUEST
+                )
+            }
+            .setNegativeButton("복원하기") { _, _ ->
+                startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/zip"
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    },
+                    BACKUP_RESTORE_REQUEST
+                )
+            }
+            .setNeutralButton("취소", null)
+            .show()
+    }
+
+    private fun createDiaryBackup(uri: Uri) {
+        try {
+            contentResolver.openOutputStream(uri)?.use { output ->
+                ZipOutputStream(output).use { zip ->
+                    val data = JSONArray()
+                    entries.forEach { entry ->
+                        data.put(JSONObject().apply {
+                            put("id", entry.id)
+                            put("date", entry.date)
+                            put("title", entry.title)
+                            put("body", entry.body)
+                        })
+                    }
+
+                    zip.putNextEntry(ZipEntry("entries.json"))
+                    zip.write(data.toString().toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+
+                    val folder = java.io.File(filesDir, "diary_photos")
+                    folder.listFiles()?.filter { it.isFile }?.forEach { file ->
+                        zip.putNextEntry(ZipEntry("photos/${file.name}"))
+                        file.inputStream().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            } ?: throw Exception("백업 파일을 열 수 없습니다.")
+
+            Toast.makeText(this, "백업 완료", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "백업 실패: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun restoreDiaryBackup(uri: Uri) {
+        try {
+            val folder = java.io.File(filesDir, "diary_photos")
+            if (!folder.exists()) folder.mkdirs()
+
+            val importedEntries = mutableListOf<DiaryEntry>()
+            val importedPhotos = mutableListOf<String>()
+
+            contentResolver.openInputStream(uri)?.use { input ->
+                ZipInputStream(input).use { zip ->
+                    var item = zip.nextEntry
+                    while (item != null) {
+                        when {
+                            item.name == "entries.json" -> {
+                                val bytes = ByteArrayOutputStream()
+                                zip.copyTo(bytes)
+                                val array = JSONArray(bytes.toString("UTF-8"))
+
+                                for (i in 0 until array.length()) {
+                                    val obj = array.getJSONObject(i)
+                                    importedEntries.add(
+                                        DiaryEntry(
+                                            obj.optLong("id"),
+                                            obj.optString("date"),
+                                            obj.optString("title"),
+                                            obj.optString("body")
+                                        )
+                                    )
+                                }
+                            }
+
+                            item.name.startsWith("photos/") &&
+                                !item.isDirectory -> {
+                                val name = item.name.substringAfterLast("/")
+                                    .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                                val file = java.io.File(folder, name)
+                                file.outputStream().use { zip.copyTo(it) }
+
+                                if (file.length() > 0L) {
+                                    importedPhotos.add(Uri.fromFile(file).toString())
+                                }
+                            }
+                        }
+                        zip.closeEntry()
+                        item = zip.nextEntry
+                    }
+                }
+            } ?: throw Exception("백업 파일을 읽을 수 없습니다.")
+
+            // 기존 기록을 유지하며 가져온 기록을 병합
+            val merged = (entries + importedEntries)
+                .associateBy { it.id }
+                .values
+                .sortedByDescending { it.id }
+
+            entries.clear()
+            entries.addAll(merged)
+            persistEntries()
+
+            photoUris.addAll(importedPhotos)
+            val uniquePhotos = photoUris.distinct()
+            photoUris.clear()
+            photoUris.addAll(uniquePhotos)
+            savePhotos()
+
+            showScreen()
+            Toast.makeText(this, "복원 완료", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "복원 실패: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     }
 }
