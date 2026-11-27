@@ -606,12 +606,32 @@ class MainActivity : Activity() {
         }
         photoUris.forEach { value ->
             val image = ImageView(this).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                background = rounded(Color.rgb(230, 226, 215), 7)
-                try { setImageURI(Uri.parse(value)) } catch (_: Exception) { setBackgroundColor(Color.LTGRAY) }
-                setOnClickListener { if (selectedPhotoUris.isNotEmpty()) togglePhotoSelection(value) else showPhoto(value) }
-                setOnLongClickListener { togglePhotoSelection(value); true }
-                if (selectedPhotoUris.contains(value)) foreground = ColorDrawable(0x66000000)
+    scaleType = ImageView.ScaleType.FIT_CENTER
+    adjustViewBounds = true
+    background = rounded(Color.rgb(230, 226, 215), 7)
+
+    try {
+        setImageURI(Uri.parse(value))
+    } catch (_: Exception) {
+        setBackgroundColor(Color.LTGRAY)
+    }
+
+    setOnClickListener {
+        if (selectedPhotoUris.isNotEmpty()) {
+            togglePhotoSelection(value)
+        } else {
+            showPhoto(value)
+        }
+    }
+
+    setOnLongClickListener {
+        togglePhotoSelection(value)
+        true
+    }
+
+    if (selectedPhotoUris.contains(value)) {
+        foreground = ColorDrawable(0x66000000)
+    }
             }
             grid.addView(image, android.widget.GridLayout.LayoutParams().apply {
                 width = 0
