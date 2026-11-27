@@ -1,69 +1,55 @@
 package com.supermenpark.dayflowdiary
 
 import android.app.Activity
-import android.Manifest
-import android.content.pm.PackageManager
-import android.location.Geocoder
-import android.location.Location
-import android.location.LocationManager
 import android.app.AlertDialog
 import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.random.Random
-import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import kotlin.random.Random
 
 class MainActivity : Activity() {
-
-    private val prefs by lazy {
-        getSharedPreferences("my_diary", MODE_PRIVATE)
-    }
-
+    private val prefs by lazy { getSharedPreferences("my_diary", MODE_PRIVATE) }
     private val entries = mutableListOf<DiaryEntry>()
     private val photoUris = mutableListOf<String>()
     private val selectedPhotoUris = mutableSetOf<String>()
 
     private val PHOTO_PICK_REQUEST = 410
-    private val LOCATION_PERMISSION_REQUEST = 520
     private val BACKUP_CREATE_REQUEST = 610
     private val BACKUP_RESTORE_REQUEST = 611
 
-    private lateinit var weatherText: TextView
-    private lateinit var diaryWeatherText: TextView
     private lateinit var root: FrameLayout
-    private lateinit var appContainer: LinearLayout
     private lateinit var drawerPanel: LinearLayout
     private lateinit var scrim: View
     private lateinit var menuHandle: TextView
-
     private lateinit var content: LinearLayout
     private lateinit var titleInput: EditText
     private lateinit var bodyInput: EditText
     private lateinit var dateText: TextView
+    private lateinit var diaryWeatherText: TextView
 
     private var selectedId: Long? = null
     private var currentMode = 0
     private var drawerOpen = false
-
     private var touchStartX = 0f
     private var touchStartY = 0f
 
@@ -72,15 +58,9 @@ class MainActivity : Activity() {
     private val ink = Color.rgb(65, 61, 53)
     private val accent = Color.rgb(117, 125, 91)
     private val drawerColor = Color.rgb(49, 55, 49)
-
     private val drawerWidth = 270
 
-    data class DiaryEntry(
-        val id: Long,
-        val date: String,
-        val title: String,
-        val body: String
-    )
+    data class DiaryEntry(val id: Long, val date: String, val title: String, val body: String)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,71 +75,43 @@ class MainActivity : Activity() {
                 touchStartX = event.rawX
                 touchStartY = event.rawY
             }
-
             MotionEvent.ACTION_UP -> {
                 val dx = event.rawX - touchStartX
                 val dy = event.rawY - touchStartY
-
-                if (
-                    kotlin.math.abs(dx) > dp(65) &&
-                    kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.3f
-                ) {
-                    if (!drawerOpen && touchStartX < dp(35) && dx > 0) {
-                        openDrawer()
-                    } else if (
-                        drawerOpen &&
-                        dx < 0 &&
-                        touchStartX < dp(drawerWidth + 50)
-                    ) {
-                        closeDrawer()
-                    }
+                if (kotlin.math.abs(dx) > dp(65) && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.3f) {
+                    if (!drawerOpen && touchStartX < dp(35) && dx > 0) openDrawer()
+                    else if (drawerOpen && dx < 0 && touchStartX < dp(drawerWidth + 50)) closeDrawer()
                 }
             }
         }
-
         return super.dispatchTouchEvent(event)
     }
 
     private fun showScreen() {
         drawerOpen = false
-
-        root = FrameLayout(this).apply {
-            setBackgroundColor(pageBackground)
-        }
-
-        appContainer = LinearLayout(this).apply {
+        root = FrameLayout(this).apply { setBackgroundColor(pageBackground) }
+        val app = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(pageBackground)
         }
+        root.addView(app, FrameLayout.LayoutParams(-1, -1))
 
-        root.addView(appContainer, FrameLayout.LayoutParams(-1, -1))
-
-        val header = FrameLayout(this).apply {
+        val banner = FrameLayout(this).apply {
             background = rounded(Color.rgb(115, 125, 104), 14)
             clipToOutline = true
         }
-
         val bannerImage = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(Color.rgb(115, 125, 104))
         }
-
-        header.addView(bannerImage, FrameLayout.LayoutParams(-1, -1))
-
-        val shade = View(this).apply {
+        banner.addView(bannerImage, FrameLayout.LayoutParams(-1, -1))
+        banner.addView(View(this).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.BOTTOM_TOP,
-                intArrayOf(
-                    0x99000000.toInt(),
-                    0x22000000,
-                    0x44000000
-                )
+                intArrayOf(0x99000000.toInt(), 0x22000000, 0x44000000)
             )
-        }
-
-        header.addView(shade, FrameLayout.LayoutParams(-1, -1))
-
-        val bannerQuote = TextView(this).apply {
+        }, FrameLayout.LayoutParams(-1, -1))
+        banner.addView(TextView(this).apply {
             text = dailyBannerQuote()
             textSize = 19f
             setTextColor(Color.WHITE)
@@ -168,85 +120,39 @@ class MainActivity : Activity() {
             setPadding(dp(24), dp(12), dp(24), dp(12))
             maxLines = 2
             setShadowLayer(5f, 1f, 2f, Color.BLACK)
-        }
-
-        header.addView(
-            bannerQuote,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER
-            )
-        )
-
-        appContainer.addView(
-            header,
-            LinearLayout.LayoutParams(-1, dp(180)).apply {
-                setMargins(dp(18), dp(12), dp(18), dp(12))
-            }
-        )
-
-        // 화면에는 표시하지 않는 날씨 갱신용 뷰
-        // 날씨는 다이어리 우측 상단에만 표시
-        weatherText = TextView(this).apply {
-            text = "📍 지역·날씨 확인"
-        }
-
+        }, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
+        app.addView(banner, LinearLayout.LayoutParams(-1, dp(180)).apply {
+            setMargins(dp(18), dp(12), dp(18), dp(12))
+        })
         loadDailyBanner(bannerImage)
-        loadWeatherForCurrentLocation()
 
         val menu = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(10), dp(5), dp(10), dp(12))
         }
-
-        val menuNames = listOf(
-            "일기 쓰기",
-            "세로 메모지",
-            "포스트잇 모아보기"
-        )
-
-        menuNames.forEachIndexed { index, name ->
-            val button = TextView(this).apply {
-                text = name
+        listOf("일기 쓰기", "세로 메모지", "포스트잇 모아보기").forEachIndexed { index, label ->
+            menu.addView(TextView(this).apply {
+                text = label
                 textSize = 12f
                 gravity = Gravity.CENTER
-                setPadding(dp(10), dp(12), dp(10), dp(12))
-                setTextColor(
-                    if (currentMode == index) Color.WHITE else accent
-                )
-                background = rounded(
-                    if (currentMode == index) accent else paper,
-                    12
-                )
-                setOnClickListener {
-                    currentMode = index
-                    showScreen()
-                }
-            }
-
-            val params = LinearLayout.LayoutParams(0, dp(43), 1f)
-            params.setMargins(dp(3), 0, dp(3), 0)
-            menu.addView(button, params)
+                setPadding(dp(8), dp(12), dp(8), dp(12))
+                setTextColor(if (currentMode == index) Color.WHITE else accent)
+                background = rounded(if (currentMode == index) accent else paper, 12)
+                setOnClickListener { currentMode = index; selectedPhotoUris.clear(); showScreen() }
+            }, LinearLayout.LayoutParams(0, dp(43), 1f).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            })
         }
-
-        appContainer.addView(menu)
+        app.addView(menu)
 
         val scroll = ScrollView(this)
-
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(17), dp(8), dp(17), dp(30))
         }
-
         scroll.addView(content)
-
-        appContainer.addView(
-            scroll,
-            LinearLayout.LayoutParams(-1, 0, 1f)
-        )
-
+        app.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
 
         when (currentMode) {
@@ -255,61 +161,35 @@ class MainActivity : Activity() {
             2 -> buildMemoCollection(content, true)
             3 -> buildPhotoAlbum(content)
         }
-
         buildDrawer()
     }
 
-    // 매일 바뀌는 응원 문구
     private fun dailyBannerQuote(): String {
         val quotes = listOf(
-            "오늘도 충분히 잘하고 있어.",
-            "천천히 가도 괜찮아. 멈추지만 않으면 돼.",
-            "오늘의 작은 걸음이 내일을 바꿔.",
-            "너의 하루는 그 자체로 소중해.",
-            "잘하려 애쓴 오늘, 그것만으로 충분해.",
-            "좋은 일은 생각보다 가까이에 있어.",
-            "오늘도 너답게, 편안하게.",
-            "지금까지 잘 버텨왔고 앞으로도 잘할 거야.",
-            "작은 행복을 놓치지 않는 하루가 되길.",
-            "오늘은 어제보다 조금 더 웃어보자.",
-            "새로운 하루에는 새로운 기회가 있어.",
-            "오늘도 네 편이 되어주자.",
-            "조금 느려도 괜찮아. 잘 가고 있어.",
-            "마음 편한 하루가 가장 좋은 하루야.",
+            "오늘도 충분히 잘하고 있어.", "천천히 가도 괜찮아. 멈추지만 않으면 돼.",
+            "오늘의 작은 걸음이 내일을 바꿔.", "너의 하루는 그 자체로 소중해.",
+            "잘하려 애쓴 오늘, 그것만으로 충분해.", "좋은 일은 생각보다 가까이에 있어.",
+            "오늘도 너답게, 편안하게.", "지금까지 잘 버텨왔고 앞으로도 잘할 거야.",
+            "작은 행복을 놓치지 않는 하루가 되길.", "오늘은 어제보다 조금 더 웃어보자.",
+            "새로운 하루에는 새로운 기회가 있어.", "오늘도 네 편이 되어주자.",
+            "조금 느려도 괜찮아. 잘 가고 있어.", "마음 편한 하루가 가장 좋은 하루야.",
             "언젠가 오늘을 웃으며 이야기할 거야."
         )
-
-        val todayKey =
-            SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-
-        val savedDate = prefs.getString("banner_quote_date", "")
-
-        val index = if (savedDate == todayKey) {
-            prefs.getInt("banner_quote_index", 0)
-                .coerceIn(quotes.indices)
+        val key = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        val index = if (prefs.getString("banner_quote_date", "") == key) {
+            prefs.getInt("banner_quote_index", 0).coerceIn(quotes.indices)
         } else {
-            val previous = prefs.getInt("banner_quote_index", -1)
+            val old = prefs.getInt("banner_quote_index", -1)
             var next = Random.nextInt(quotes.size)
-
-            if (quotes.size > 1 && next == previous) {
-                next = (next + 1) % quotes.size
-            }
-
-            prefs.edit()
-                .putString("banner_quote_date", todayKey)
-                .putInt("banner_quote_index", next)
-                .apply()
-
+            if (next == old) next = (next + 1) % quotes.size
+            prefs.edit().putString("banner_quote_date", key).putInt("banner_quote_index", next).apply()
             next
         }
-
         return quotes[index]
     }
 
-    // 매일 바뀌는 자연 풍경 배경
     private fun loadDailyBanner(target: ImageView) {
-
-        val imageUrls = listOf(
+        val urls = listOf(
             "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop",
             "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1200&auto=format&fit=crop",
             "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&auto=format&fit=crop",
@@ -319,66 +199,35 @@ class MainActivity : Activity() {
             "https://images.unsplash.com/photo-1500534623283-312aade485b7?w=1200&auto=format&fit=crop",
             "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop"
         )
-
-        val todayKey =
-            SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-
-        val savedDate = prefs.getString("banner_date", "")
-
-        val imageIndex = if (savedDate == todayKey) {
-            prefs.getInt("banner_index", 0)
-                .coerceIn(imageUrls.indices)
+        val key = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        val index = if (prefs.getString("banner_date", "") == key) {
+            prefs.getInt("banner_index", 0).coerceIn(urls.indices)
         } else {
-            val previous = prefs.getInt("banner_index", -1)
-            var next = Random.nextInt(imageUrls.size)
-
-            if (imageUrls.size > 1 && next == previous) {
-                next = (next + 1) % imageUrls.size
-            }
-
-            prefs.edit()
-                .putString("banner_date", todayKey)
-                .putInt("banner_index", next)
-                .apply()
-
+            val old = prefs.getInt("banner_index", -1)
+            var next = Random.nextInt(urls.size)
+            if (next == old) next = (next + 1) % urls.size
+            prefs.edit().putString("banner_date", key).putInt("banner_index", next).apply()
             next
         }
-
         Thread {
             var connection: HttpURLConnection? = null
-
             try {
-                connection =
-                    URL(imageUrls[imageIndex])
-                        .openConnection() as HttpURLConnection
-
+                connection = URL(urls[index]).openConnection() as HttpURLConnection
                 connection.connectTimeout = 10000
                 connection.readTimeout = 15000
-                connection.requestMethod = "GET"
                 connection.connect()
-
-                val bitmap = connection.inputStream.use {
-                    BitmapFactory.decodeStream(it)
+                val bitmap = connection.inputStream.use { BitmapFactory.decodeStream(it) }
+                if (bitmap != null) runOnUiThread {
+                    if (!isFinishing && !isDestroyed) target.setImageBitmap(bitmap)
                 }
-
-                if (bitmap != null) {
-                    runOnUiThread {
-                        if (!isFinishing && !isDestroyed) {
-                            target.setImageBitmap(bitmap)
-                        }
-                    }
-                }
-
             } catch (_: Exception) {
-                // 사진 로딩 실패 시 기본 배경 유지
+                // 이미지 연결에 실패하면 배경색을 유지합니다.
             } finally {
                 connection?.disconnect()
             }
-
         }.start()
     }
 
-    // 슬라이드 메뉴
     private fun buildDrawer() {
         scrim = View(this).apply {
             setBackgroundColor(Color.BLACK)
@@ -386,250 +235,130 @@ class MainActivity : Activity() {
             visibility = View.GONE
             setOnClickListener { closeDrawer() }
         }
-
         root.addView(scrim, FrameLayout.LayoutParams(-1, -1))
-
         drawerPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(35), dp(20), dp(20))
             setBackgroundColor(drawerColor)
             elevation = dp(15).toFloat()
         }
-
-        val drawerParams = FrameLayout.LayoutParams(
-            dp(drawerWidth), -1, Gravity.START
-        )
-
-        root.addView(drawerPanel, drawerParams)
+        root.addView(drawerPanel, FrameLayout.LayoutParams(dp(drawerWidth), -1, Gravity.START))
         drawerPanel.translationX = -dp(drawerWidth).toFloat()
 
-        val brand = TextView(this).apply {
-            text = "♡\nDAYFLOW\nDiary"
+        drawerPanel.addView(TextView(this).apply {
+            text = "DAYFLOW\nDiary"
             textSize = 25f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             typeface = Typeface.create("serif", Typeface.BOLD)
             setPadding(0, dp(15), 0, dp(35))
-        }
-
-        drawerPanel.addView(
-            brand,
-            LinearLayout.LayoutParams(-1, -2)
-        )
-
-        val line = View(this).apply {
-            setBackgroundColor(Color.rgb(110, 116, 105))
-        }
-
-        drawerPanel.addView(
-            line,
-            LinearLayout.LayoutParams(-1, dp(1))
-        )
+        })
+        drawerPanel.addView(View(this).apply { setBackgroundColor(Color.rgb(110, 116, 105)) },
+            LinearLayout.LayoutParams(-1, dp(1)))
 
         addDrawerItem("⌂", "일기 쓰기", 0)
         addDrawerItem("▤", "세로 메모지", 1)
         addDrawerItem("▧", "포스트잇 모아보기", 2)
         addDrawerItem("▣", "사진첩", 3)
 
-        // 새 백업·복원 메뉴
-        val backupItem = TextView(this).apply {
+        drawerPanel.addView(TextView(this).apply {
             text = "⇅    데이터 백업 · 복원"
             textSize = 15f
             gravity = Gravity.CENTER_VERTICAL
             setTextColor(Color.WHITE)
             setPadding(dp(15), 0, dp(8), 0)
             background = rounded(drawerColor, 12)
+            setOnClickListener { closeDrawer(); showBackupRestoreDialog() }
+        }, LinearLayout.LayoutParams(-1, dp(57)).apply { setMargins(0, dp(7), 0, dp(7)) })
 
-            setOnClickListener {
-                closeDrawer()
-                showBackupRestoreDialog()
-            }
-        }
-
-        val backupParams = LinearLayout.LayoutParams(-1, dp(57))
-        backupParams.setMargins(0, dp(7), 0, dp(7))
-        drawerPanel.addView(backupItem, backupParams)
-
-        val historyItem = TextView(this).apply {
+        drawerPanel.addView(TextView(this).apply {
             text = "▣    기록 보기"
             textSize = 16f
             gravity = Gravity.CENTER_VERTICAL
             setTextColor(Color.WHITE)
             setPadding(dp(12), dp(17), dp(8), dp(17))
-            setOnClickListener {
-                closeDrawer()
-                showHistory()
-            }
-        }
+            setOnClickListener { closeDrawer(); showHistory() }
+        }, LinearLayout.LayoutParams(-1, dp(55)))
 
-        drawerPanel.addView(
-            historyItem,
-            LinearLayout.LayoutParams(-1, dp(55))
-        )
-
-        drawerPanel.addView(
-            View(this),
-            LinearLayout.LayoutParams(-1, 0, 1f)
-        )
-
-        val footerLine = View(this).apply {
-            setBackgroundColor(Color.rgb(110, 116, 105))
-        }
-
-        drawerPanel.addView(
-            footerLine,
-            LinearLayout.LayoutParams(-1, dp(1))
-        )
-
-        val footer = TextView(this).apply {
+        drawerPanel.addView(View(this), LinearLayout.LayoutParams(-1, 0, 1f))
+        drawerPanel.addView(View(this).apply { setBackgroundColor(Color.rgb(110, 116, 105)) },
+            LinearLayout.LayoutParams(-1, dp(1)))
+        drawerPanel.addView(TextView(this).apply {
             text = "♥\n오늘도 행복한 하루 되세요\n:)"
             textSize = 13f
             gravity = Gravity.CENTER
             setTextColor(Color.LTGRAY)
             setPadding(0, dp(20), 0, dp(20))
-        }
-
-        drawerPanel.addView(footer)
+        })
 
         menuHandle = TextView(this).apply {
             text = "›"
             textSize = 27f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-
             background = GradientDrawable().apply {
-                setColor(Color.rgb(117, 125, 91))
-                cornerRadii = floatArrayOf(
-                    0f, 0f,
-                    dp(13).toFloat(), dp(13).toFloat(),
-                    dp(13).toFloat(), dp(13).toFloat(),
-                    0f, 0f
-                )
+                setColor(accent)
+                cornerRadii = floatArrayOf(0f, 0f, dp(13).toFloat(), dp(13).toFloat(),
+                    dp(13).toFloat(), dp(13).toFloat(), 0f, 0f)
             }
-
             elevation = dp(20).toFloat()
-
-            setOnClickListener {
-                if (drawerOpen) closeDrawer() else openDrawer()
-            }
+            setOnClickListener { if (drawerOpen) closeDrawer() else openDrawer() }
         }
-
-        val handleParams = FrameLayout.LayoutParams(
-            dp(25), dp(76),
-            Gravity.START or Gravity.CENTER_VERTICAL
-        )
-
-        root.addView(menuHandle, handleParams)
-        menuHandle.translationX = 0f
+        root.addView(menuHandle, FrameLayout.LayoutParams(dp(25), dp(76),
+            Gravity.START or Gravity.CENTER_VERTICAL))
     }
 
-    private fun addDrawerItem(
-        icon: String,
-        name: String,
-        mode: Int
-    ) {
-        val item = TextView(this).apply {
+    private fun addDrawerItem(icon: String, name: String, mode: Int) {
+        drawerPanel.addView(TextView(this).apply {
             text = "$icon    $name"
             textSize = 16f
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(15), 0, dp(8), 0)
             setTextColor(Color.WHITE)
-
-            background = rounded(
-                if (currentMode == mode) Color.rgb(91, 119, 153)
-                else drawerColor,
-                12
-            )
-
-            setOnClickListener {
-                currentMode = mode
-                selectedPhotoUris.clear()
-                showScreen()
-            }
-        }
-
-        val params = LinearLayout.LayoutParams(-1, dp(57))
-        params.setMargins(0, dp(7), 0, dp(7))
-        drawerPanel.addView(item, params)
+            background = rounded(if (currentMode == mode) Color.rgb(91, 119, 93) else drawerColor, 12)
+            setOnClickListener { currentMode = mode; selectedPhotoUris.clear(); showScreen() }
+        }, LinearLayout.LayoutParams(-1, dp(57)).apply { setMargins(0, dp(7), 0, dp(7)) })
     }
 
     private fun openDrawer() {
         if (drawerOpen) return
-
         drawerOpen = true
         scrim.visibility = View.VISIBLE
         menuHandle.text = "‹"
-
         scrim.animate().alpha(0.48f).setDuration(220).start()
         drawerPanel.animate().translationX(0f).setDuration(240).start()
-
-        menuHandle.animate()
-            .translationX(dp(drawerWidth).toFloat())
-            .setDuration(240)
-            .start()
+        menuHandle.animate().translationX(dp(drawerWidth).toFloat()).setDuration(240).start()
     }
 
     private fun closeDrawer() {
         if (!drawerOpen) return
-
         drawerOpen = false
         menuHandle.text = "›"
-
-        drawerPanel.animate()
-            .translationX(-dp(drawerWidth).toFloat())
-            .setDuration(220)
-            .start()
-
-        menuHandle.animate()
-            .translationX(0f)
-            .setDuration(220)
-            .start()
-
-        scrim.animate()
-            .alpha(0f)
-            .setDuration(220)
-            .withEndAction {
-                scrim.visibility = View.GONE
-            }
-            .start()
+        drawerPanel.animate().translationX(-dp(drawerWidth).toFloat()).setDuration(220).start()
+        menuHandle.animate().translationX(0f).setDuration(220).start()
+        scrim.animate().alpha(0f).setDuration(220).withEndAction { scrim.visibility = View.GONE }.start()
     }
-        // 일기 화면
-    private fun buildDiary(
-        target: LinearLayout,
-        entry: DiaryEntry? = null
-    ) {
+
+    private fun buildDiary(target: LinearLayout, entry: DiaryEntry? = null) {
         target.removeAllViews()
         selectedId = entry?.id
-
         val sheet = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(23), dp(25), dp(23), dp(25))
             setBackground(rounded(paper, 8))
             elevation = dp(3).toFloat()
         }
-
-        target.addView(
-            sheet,
-            LinearLayout.LayoutParams(-1, -2)
-        )
-
-        val diaryHeaderRow = LinearLayout(this).apply {
+        target.addView(sheet, LinearLayout.LayoutParams(-1, -2))
+        val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
-        val smallTitle = TextView(this).apply {
+        header.addView(TextView(this).apply {
             text = "TODAY'S DIARY"
             textSize = 11f
             letterSpacing = 0.15f
             setTextColor(accent)
-        }
-
-        diaryHeaderRow.addView(
-            smallTitle,
-            LinearLayout.LayoutParams(0, -2, 1f)
-        )
-
+        }, LinearLayout.LayoutParams(0, -2, 1f))
         diaryWeatherText = TextView(this).apply {
             text = "📍 지역 확인 중 · 날씨 확인 중"
             textSize = 12f
@@ -637,13 +366,8 @@ class MainActivity : Activity() {
             setTextColor(Color.GRAY)
             maxLines = 2
         }
-
-        diaryHeaderRow.addView(
-            diaryWeatherText,
-            LinearLayout.LayoutParams(-2, -2)
-        )
-
-        sheet.addView(diaryHeaderRow)
+        header.addView(diaryWeatherText)
+        sheet.addView(header)
 
         dateText = TextView(this).apply {
             text = entry?.date ?: today()
@@ -651,17 +375,13 @@ class MainActivity : Activity() {
             setTextColor(Color.GRAY)
             setPadding(0, dp(15), 0, dp(20))
         }
-
         sheet.addView(dateText)
-
-        // 연속 기록 일수 표시
-        val streakText = TextView(this).apply {
+        sheet.addView(TextView(this).apply {
             text = diaryStreakMessage()
             textSize = 13f
             setTextColor(accent)
-            setPadding(0, dp(0), 0, dp(14))
-        }
-        sheet.addView(streakText)
+            setPadding(0, 0, 0, dp(14))
+        })
 
         titleInput = EditText(this).apply {
             hint = "오늘의 제목을 적어보세요"
@@ -674,17 +394,9 @@ class MainActivity : Activity() {
             setSingleLine(true)
             setPadding(0, dp(8), 0, dp(15))
         }
-
         sheet.addView(titleInput)
-
-        val divider = View(this).apply {
-            setBackgroundColor(Color.rgb(225, 220, 207))
-        }
-
-        sheet.addView(
-            divider,
-            LinearLayout.LayoutParams(-1, dp(1))
-        )
+        sheet.addView(View(this).apply { setBackgroundColor(Color.rgb(225, 220, 207)) },
+            LinearLayout.LayoutParams(-1, dp(1)))
 
         bodyInput = EditText(this).apply {
             hint = "오늘 있었던 일들을 자유롭게 적어보세요.\n\n기억하고 싶은 순간도 좋고,\n마음속에 담아둔 이야기도 좋습니다.\n\n이곳은 나만의 작은 기록 공간입니다."
@@ -698,254 +410,143 @@ class MainActivity : Activity() {
             setPadding(0, dp(20), 0, dp(15))
             setLineSpacing(dp(5).toFloat(), 1f)
         }
-
         sheet.addView(bodyInput)
-
-        val save = Button(this).apply {
+        sheet.addView(Button(this).apply {
             text = "기록 저장하기"
             isAllCaps = false
             textSize = 16f
             setTextColor(Color.WHITE)
             background = rounded(accent, 10)
-            setOnClickListener {
-                saveDiary()
-            }
-        }
+            setOnClickListener { saveDiary() }
+        }, LinearLayout.LayoutParams(-1, dp(52)))
 
-        sheet.addView(
-            save,
-            LinearLayout.LayoutParams(-1, dp(52))
-        )
-
-        val newDiary = TextView(this).apply {
+        target.addView(TextView(this).apply {
             text = "+ 새 일기 쓰기"
             textSize = 15f
             gravity = Gravity.CENTER
             setTextColor(accent)
             setPadding(dp(10), dp(22), dp(10), dp(15))
-            setOnClickListener {
-                buildDiary(target)
-            }
-        }
-
-        target.addView(newDiary)
+            setOnClickListener { buildDiary(target) }
+        })
     }
 
-    // 일기 저장
     private fun saveDiary() {
         val title = titleInput.text.toString().trim()
         val body = bodyInput.text.toString().trim()
-
         if (title.isEmpty() && body.isEmpty()) {
-            Toast.makeText(
-                this,
-                "내용을 입력해 주세요.",
-                Toast.LENGTH_SHORT
-            ).show()
+            Toast.makeText(this, "내용을 입력해 주세요.", Toast.LENGTH_SHORT).show()
             return
         }
-
         val id = selectedId ?: System.currentTimeMillis()
-
-        val entry = DiaryEntry(
-            id,
-            dateText.text.toString(),
-            title,
-            body
-        )
-
+        val item = DiaryEntry(id, dateText.text.toString(), title, body)
         val index = entries.indexOfFirst { it.id == id }
-
-        if (index >= 0) {
-            entries[index] = entry
-        } else {
-            entries.add(0, entry)
-        }
-
+        if (index >= 0) entries[index] = item else entries.add(0, item)
         persistEntries()
         selectedId = id
-
-        Toast.makeText(
-            this,
-            "일기가 저장되었습니다.",
-            Toast.LENGTH_SHORT
-        ).show()
+        Toast.makeText(this, "일기가 저장되었습니다.", Toast.LENGTH_SHORT).show()
     }
 
-    // 메모 모아보기
     private fun buildMemoCollection(target: LinearLayout, sticky: Boolean) {
         target.removeAllViews()
-
-        val heading = TextView(this).apply {
+        target.addView(TextView(this).apply {
             text = if (sticky) "나의 작은 기록들" else "소중한 하루의 기록"
             textSize = 21f
             typeface = Typeface.create("serif", Typeface.BOLD)
             setTextColor(ink)
             setPadding(dp(5), dp(10), dp(5), dp(8))
-        }
-
-        target.addView(heading)
-
-        val description = TextView(this).apply {
-            text = if (sticky) {
-                "메모지를 좌우로 넘겨 기록을 살펴보세요."
-            } else {
-                "아이보리 종이 위에 쌓인 나의 일기입니다."
-            }
-
+        })
+        target.addView(TextView(this).apply {
+            text = if (sticky) "메모지를 좌우로 넘겨 기록을 살펴보세요."
+            else "아이보리 종이 위에 쌓인 나의 일기입니다."
             textSize = 13f
             setTextColor(Color.GRAY)
             setPadding(dp(5), 0, dp(5), dp(18))
-        }
-
-        target.addView(description)
-
-        val add = TextView(this).apply {
+        })
+        target.addView(TextView(this).apply {
             text = "+ 새 일기 작성하기"
             textSize = 14f
             gravity = Gravity.CENTER
             setTextColor(accent)
             setPadding(dp(12), dp(13), dp(12), dp(13))
             background = rounded(paper, 10)
-
-            setOnClickListener {
-                currentMode = 0
-                showScreen()
-            }
-        }
-
-        target.addView(add, LinearLayout.LayoutParams(-1, -2))
+            setOnClickListener { currentMode = 0; showScreen() }
+        }, LinearLayout.LayoutParams(-1, -2))
 
         if (entries.isEmpty()) {
-            val empty = TextView(this).apply {
+            target.addView(TextView(this).apply {
                 text = "\n\n아직 기록이 없습니다.\n첫 번째 하루를 기록해 보세요."
                 textSize = 15f
                 gravity = Gravity.CENTER
                 setTextColor(Color.GRAY)
                 setPadding(dp(10), dp(35), dp(10), dp(35))
-            }
-
-            target.addView(empty)
+            })
             return
         }
-
         val horizontal = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             setPadding(0, dp(15), 0, dp(15))
         }
-
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.TOP
-        }
-
-        entries.forEachIndexed { index, entry ->
-
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP }
+        entries.forEachIndexed { index, item ->
+            val color = if (!sticky) paper else when (index % 4) {
+                0 -> Color.rgb(255, 242, 190)
+                1 -> Color.rgb(230, 239, 215)
+                2 -> Color.rgb(246, 226, 218)
+                else -> Color.rgb(232, 231, 245)
+            }
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                gravity = Gravity.TOP
                 setPadding(dp(17), dp(20), dp(17), dp(17))
-
-                val cardColor = if (sticky) {
-                    when (index % 4) {
-                        0 -> Color.rgb(255, 242, 190)
-                        1 -> Color.rgb(230, 239, 215)
-                        2 -> Color.rgb(246, 226, 218)
-                        else -> Color.rgb(232, 231, 245)
-                    }
-                } else {
-                    paper
-                }
-
-                setBackground(rounded(cardColor, if (sticky) 5 else 8))
+                setBackground(rounded(color, if (sticky) 5 else 8))
                 elevation = dp(3).toFloat()
-
-                setOnClickListener {
-                    currentMode = 0
-                    showScreen()
-                    buildDiary(content, entry)
-                }
+                setOnClickListener { currentMode = 0; showScreen(); buildDiary(content, item) }
             }
-
-            val date = TextView(this).apply {
-                text = entry.date
-                textSize = 11f
-                setTextColor(accent)
-            }
-
-            card.addView(date)
-
-            val title = TextView(this).apply {
-                text = entry.title.ifBlank { "제목 없는 일기" }
+            card.addView(TextView(this).apply { text = item.date; textSize = 11f; setTextColor(accent) })
+            card.addView(TextView(this).apply {
+                text = item.title.ifBlank { "제목 없는 일기" }
                 textSize = if (sticky) 16f else 19f
                 typeface = Typeface.create("serif", Typeface.BOLD)
                 setTextColor(ink)
                 setPadding(0, dp(13), 0, dp(12))
                 maxLines = 2
-            }
-
-            card.addView(title)
-
-            val body = TextView(this).apply {
-                text = entry.body.ifBlank { "내용 없음" }
+            })
+            card.addView(TextView(this).apply {
+                text = item.body.ifBlank { "내용 없음" }
                 textSize = 13f
                 setTextColor(ink)
                 maxLines = if (sticky) 7 else 12
                 setLineSpacing(dp(3).toFloat(), 1f)
-            }
-
-            card.addView(body)
-
-            val open = TextView(this).apply {
+            })
+            card.addView(TextView(this).apply {
                 text = "기록 열기  →"
                 textSize = 12f
                 setTextColor(accent)
                 setPadding(0, dp(15), 0, 0)
-            }
-
-            card.addView(open)
-
-            val width = if (sticky) 155 else 245
-            val height = if (sticky) 230 else 340
-
-            val params = LinearLayout.LayoutParams(dp(width), dp(height))
-            params.setMargins(dp(5), dp(5), dp(12), dp(10))
-
-            row.addView(card, params)
+            })
+            row.addView(card, LinearLayout.LayoutParams(
+                dp(if (sticky) 155 else 245), dp(if (sticky) 230 else 340)
+            ).apply { setMargins(dp(5), dp(5), dp(12), dp(10)) })
         }
-
         horizontal.addView(row)
-
-        target.addView(
-            horizontal,
-            LinearLayout.LayoutParams(-1, -2)
-        )
+        target.addView(horizontal, LinearLayout.LayoutParams(-1, -2))
     }
 
-    // 사진첩 화면
     private fun buildPhotoAlbum(target: LinearLayout) {
         target.removeAllViews()
-
-        val heading = TextView(this).apply {
+        target.addView(TextView(this).apply {
             text = "나의 사진첩"
             textSize = 23f
             typeface = Typeface.create("serif", Typeface.BOLD)
             setTextColor(ink)
             setPadding(dp(5), dp(12), dp(5), dp(6))
-        }
-
-        target.addView(heading)
-
-        val description = TextView(this).apply {
+        })
+        target.addView(TextView(this).apply {
             text = "소중한 순간을 사진으로 보관하세요."
             textSize = 13f
             setTextColor(Color.GRAY)
             setPadding(dp(5), 0, dp(5), dp(18))
-        }
-
-        target.addView(description)
-
-        val addButton = TextView(this).apply {
+        })
+        target.addView(TextView(this).apply {
             text = "+ 휴대폰에서 사진 가져오기"
             textSize = 15f
             gravity = Gravity.CENTER
@@ -953,547 +554,248 @@ class MainActivity : Activity() {
             setPadding(dp(12), dp(15), dp(12), dp(15))
             background = rounded(accent, 12)
             setOnClickListener { openPhotoPicker() }
-        }
-
-        target.addView(
-            addButton,
-            LinearLayout.LayoutParams(-1, -2).apply {
-                setMargins(0, 0, 0, dp(18))
-            }
-        )
+        }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, dp(18)) })
 
         if (photoUris.isEmpty()) {
-            val empty = TextView(this).apply {
+            target.addView(TextView(this).apply {
                 text = "\n\n📷\n\n아직 보관한 사진이 없습니다.\n위 버튼을 눌러 첫 사진을 추가해 보세요."
                 textSize = 15f
                 gravity = Gravity.CENTER
                 setTextColor(Color.GRAY)
                 setPadding(dp(12), dp(35), dp(12), dp(35))
                 background = rounded(paper, 12)
-            }
-
-            target.addView(empty, LinearLayout.LayoutParams(-1, dp(250)))
+            }, LinearLayout.LayoutParams(-1, dp(250)))
             return
         }
 
-        val selectionBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, dp(10))
-        }
-
-        val selectionInfo = TextView(this).apply {
-            text = if (selectedPhotoUris.isEmpty()) {
-                "사진을 길게 눌러 여러 장을 선택하세요."
-            } else {
-                "${selectedPhotoUris.size}장 선택됨"
-            }
-
+        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        bar.addView(TextView(this).apply {
+            text = if (selectedPhotoUris.isEmpty()) "사진을 길게 눌러 여러 장을 선택하세요."
+            else "${selectedPhotoUris.size}장 선택됨"
             textSize = 12f
             setTextColor(Color.GRAY)
-        }
-
-        selectionBar.addView(
-            selectionInfo,
-            LinearLayout.LayoutParams(0, -2, 1f)
-        )
-
-        val deleteButton = TextView(this).apply {
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        bar.addView(TextView(this).apply {
             text = "선택 삭제"
             textSize = 13f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             setPadding(dp(13), dp(9), dp(13), dp(9))
             background = rounded(accent, 9)
-
-            visibility = if (selectedPhotoUris.isEmpty()) {
-                View.GONE
-            } else {
-                View.VISIBLE
-            }
-
+            visibility = if (selectedPhotoUris.isEmpty()) View.GONE else View.VISIBLE
             setOnClickListener {
                 if (selectedPhotoUris.isEmpty()) return@setOnClickListener
-
                 AlertDialog.Builder(this@MainActivity)
                     .setMessage("${selectedPhotoUris.size}장의 사진을 삭제할까요?")
                     .setNegativeButton("취소", null)
                     .setPositiveButton("삭제") { _, _ ->
-
-                        val deleting = selectedPhotoUris.toList()
-
-                        deleting.forEach { uriString ->
-                            deleteStoredPhoto(uriString)
-                            photoUris.remove(uriString)
-                        }
-
+                        selectedPhotoUris.toList().forEach { deleteStoredPhoto(it); photoUris.remove(it) }
                         selectedPhotoUris.clear()
                         savePhotos()
                         showScreen()
-
-                        Toast.makeText(
-                            this@MainActivity,
-                            "선택한 사진을 삭제했습니다.",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    .show()
+                        Toast.makeText(this@MainActivity, "선택한 사진을 삭제했습니다.", Toast.LENGTH_SHORT).show()
+                    }.show()
             }
-        }
-
-        selectionBar.addView(deleteButton)
-        target.addView(selectionBar)
+        })
+        target.addView(bar)
 
         val grid = android.widget.GridLayout(this).apply {
             columnCount = 3
             alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS
             useDefaultMargins = false
         }
-
-        photoUris.forEach { uriString ->
-
+        photoUris.forEach { value ->
             val image = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 background = rounded(Color.rgb(230, 226, 215), 7)
-
-                try {
-                    setImageURI(Uri.parse(uriString))
-                } catch (_: Exception) {
-                    setBackgroundColor(Color.LTGRAY)
-                }
-
-                setOnClickListener {
-                    if (selectedPhotoUris.isNotEmpty()) {
-                        togglePhotoSelection(uriString)
-                    } else {
-                        showPhoto(uriString)
-                    }
-                }
-
-                setOnLongClickListener {
-                    togglePhotoSelection(uriString)
-                    true
-                }
-
-                if (selectedPhotoUris.contains(uriString)) {
-                    foreground = ColorDrawable(0x66000000)
-                }
+                try { setImageURI(Uri.parse(value)) } catch (_: Exception) { setBackgroundColor(Color.LTGRAY) }
+                setOnClickListener { if (selectedPhotoUris.isNotEmpty()) togglePhotoSelection(value) else showPhoto(value) }
+                setOnLongClickListener { togglePhotoSelection(value); true }
+                if (selectedPhotoUris.contains(value)) foreground = ColorDrawable(0x66000000)
             }
-
-            val params = android.widget.GridLayout.LayoutParams().apply {
+            grid.addView(image, android.widget.GridLayout.LayoutParams().apply {
                 width = 0
                 height = dp(112)
-
-                columnSpec = android.widget.GridLayout.spec(
-                    android.widget.GridLayout.UNDEFINED,
-                    1f
-                )
-
+                columnSpec = android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
                 setMargins(dp(3), dp(3), dp(3), dp(3))
-            }
-
-            grid.addView(image, params)
+            })
         }
-
         target.addView(grid)
     }
 
-    // 휴대폰 사진 선택
     private fun openPhotoPicker() {
         try {
-            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "image/*"
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-
-                addFlags(
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
-                )
-            }
-
-            startActivityForResult(intent, PHOTO_PICK_REQUEST)
-
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            }, PHOTO_PICK_REQUEST)
         } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "사진 선택 기능을 열 수 없습니다.",
-                Toast.LENGTH_SHORT
-            ).show()
+            Toast.makeText(this, "사진 선택 기능을 열 수 없습니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
     @Deprecated("Deprecated in Android")
-    override fun onActivityResult(
-        requestCode: Int,
-        resultCode: Int,
-        data: Intent?
-    ) {
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-
-        if (resultCode != RESULT_OK || data?.data == null) return
-
-        val uri = data.data!!
-
-        when (requestCode) {
-            BACKUP_CREATE_REQUEST -> {
-                createDiaryBackup(uri)
-                return
-            }
-
-            BACKUP_RESTORE_REQUEST -> {
-                restoreDiaryBackup(uri)
-                return
-            }
-
-            PHOTO_PICK_REQUEST -> {
-                // 기존 사진 선택 기능 유지
-            }
-
-            else -> return
-        }
-
-        val picked = mutableListOf<Uri>()
-
-        data.clipData?.let { clip ->
-            for (i in 0 until clip.itemCount) {
-                picked.add(clip.getItemAt(i).uri)
-            }
-        }
-
-        if (picked.isEmpty()) {
-            picked.add(uri)
-        }
-
-        var added = 0
-
-        picked.forEach { photoUri ->
-            try {
-                val folder = java.io.File(filesDir, "diary_photos")
-
-                if (!folder.exists()) {
-                    folder.mkdirs()
-                }
-
-                val extension = when (
-                    contentResolver.getType(photoUri)?.lowercase(Locale.ROOT)
-                ) {
-                    "image/png" -> ".png"
-                    "image/webp" -> ".webp"
-                    "image/gif" -> ".gif"
-                    else -> ".jpg"
-                }
-
-                val destination = java.io.File(
-                    folder,
-                    "photo_${System.currentTimeMillis()}_${Random.nextInt(100000)}$extension"
-                )
-
-                val copied = contentResolver.openInputStream(photoUri)?.use { input ->
-                    destination.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                    true
-                } ?: false
-
-                if (
-                    copied &&
-                    destination.exists() &&
-                    destination.length() > 0L
-                ) {
-                    val savedUri = Uri.fromFile(destination).toString()
-
-
-    @Deprecated("Deprecated in Android")
-    override fun onActivityResult(
-        requestCode: Int,
-        resultCode: Int,
-        data: Intent?
-    ) {
-        super.onActivityResult(requestCode, resultCode, data)
-
         if (resultCode != RESULT_OK || data == null) return
-
         when (requestCode) {
-            BACKUP_CREATE_REQUEST -> {
-                data.data?.let { createDiaryBackup(it) }
-                return
-            }
-
-            BACKUP_RESTORE_REQUEST -> {
-                data.data?.let { restoreDiaryBackup(it) }
-                return
-            }
-
-            PHOTO_PICK_REQUEST -> {
-                // 사진 선택 처리
-            }
-
+            BACKUP_CREATE_REQUEST -> { data.data?.let { createDiaryBackup(it) }; return }
+            BACKUP_RESTORE_REQUEST -> { data.data?.let { restoreDiaryBackup(it) }; return }
+            PHOTO_PICK_REQUEST -> Unit
             else -> return
         }
-
         val picked = mutableListOf<Uri>()
-
-        data.clipData?.let { clip ->
-            for (i in 0 until clip.itemCount) {
-                picked.add(clip.getItemAt(i).uri)
-            }
-        }
-
-        if (picked.isEmpty()) {
-            data.data?.let { picked.add(it) }
-        }
+        data.clipData?.let { clip -> for (i in 0 until clip.itemCount) picked.add(clip.getItemAt(i).uri) }
+        if (picked.isEmpty()) data.data?.let { picked.add(it) }
 
         var added = 0
-
         picked.forEach { photoUri ->
             try {
                 val folder = java.io.File(filesDir, "diary_photos")
-
                 if (!folder.exists()) folder.mkdirs()
-
-                val extension = when (
-                    contentResolver.getType(photoUri)?.lowercase(Locale.ROOT)
-                ) {
+                val extension = when (contentResolver.getType(photoUri)?.lowercase(Locale.ROOT)) {
                     "image/png" -> ".png"
                     "image/webp" -> ".webp"
                     "image/gif" -> ".gif"
                     else -> ".jpg"
                 }
-
-                val destination = java.io.File(
-                    folder,
-                    "photo_${System.currentTimeMillis()}_${Random.nextInt(100000)}$extension"
-                )
-
+                val destination = java.io.File(folder,
+                    "photo_${System.currentTimeMillis()}_${Random.nextInt(100000)}$extension")
                 val copied = contentResolver.openInputStream(photoUri)?.use { input ->
-                    destination.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
+                    destination.outputStream().use { output -> input.copyTo(output) }
                     true
                 } ?: false
-
                 if (copied && destination.exists() && destination.length() > 0L) {
-                    val savedUri = Uri.fromFile(destination).toString()
-
-                    if (!photoUris.contains(savedUri)) {
-                        photoUris.add(0, savedUri)
-                        added++
-                    }
+                    val saved = Uri.fromFile(destination).toString()
+                    if (!photoUris.contains(saved)) { photoUris.add(0, saved); added++ }
                 }
             } catch (_: Exception) {
-                // 읽을 수 없는 사진은 건너뜀
+                // 접근할 수 없는 항목은 건너뜁니다.
             }
         }
-
         selectedPhotoUris.clear()
         savePhotos()
         showScreen()
-
-        Toast.makeText(
-            this,
-            "${added}장의 사진을 앱에 보관했습니다.",
-            Toast.LENGTH_SHORT
-        ).show()
+        Toast.makeText(this, "${added}장의 사진을 앱에 보관했습니다.", Toast.LENGTH_SHORT).show()
     }
 
-
-    // 사진 선택 상태 전환
-    private fun togglePhotoSelection(uriString: String) {
-        if (selectedPhotoUris.contains(uriString)) {
-            selectedPhotoUris.remove(uriString)
-        } else {
-            selectedPhotoUris.add(uriString)
-        }
-
+    private fun togglePhotoSelection(value: String) {
+        if (selectedPhotoUris.contains(value)) selectedPhotoUris.remove(value) else selectedPhotoUris.add(value)
         showScreen()
     }
 
-    // 앱 내부에 저장된 사진 파일 삭제
-    private fun deleteStoredPhoto(uriString: String) {
+    private fun deleteStoredPhoto(value: String) {
         try {
-            val uri = Uri.parse(uriString)
-
-            if (uri.scheme == "file") {
-                uri.path?.let { path ->
-                    val file = java.io.File(path)
-
-                    if (file.exists()) {
-                        file.delete()
-                    }
-                }
+            val uri = Uri.parse(value)
+            if (uri.scheme == "file") uri.path?.let { path ->
+                val file = java.io.File(path)
+                if (file.exists()) file.delete()
             }
-        } catch (_: Exception) {
-            // 삭제할 파일이 없는 경우 건너뜀
-        }
+        } catch (_: Exception) { }
     }
 
-    // 사진 크게 보기 및 삭제
-    private fun showPhoto(uriString: String) {
+    private fun showPhoto(value: String) {
         val image = ImageView(this).apply {
-            setImageURI(Uri.parse(uriString))
+            setImageURI(Uri.parse(value))
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
             setBackgroundColor(Color.BLACK)
         }
-
-        AlertDialog.Builder(this)
-            .setTitle("사진")
-            .setView(image)
+        AlertDialog.Builder(this).setTitle("사진").setView(image)
             .setPositiveButton("닫기", null)
             .setNegativeButton("사진 삭제") { _, _ ->
-
-                deleteStoredPhoto(uriString)
-                photoUris.remove(uriString)
-                selectedPhotoUris.remove(uriString)
+                deleteStoredPhoto(value)
+                photoUris.remove(value)
+                selectedPhotoUris.remove(value)
                 savePhotos()
                 showScreen()
-
-                Toast.makeText(
-                    this,
-                    "사진을 사진첩에서 삭제했습니다.",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-            .show()
+                Toast.makeText(this, "사진을 사진첩에서 삭제했습니다.", Toast.LENGTH_SHORT).show()
+            }.show()
     }
 
-    // 사진첩은 기존 저장 방식 그대로 유지
     private fun loadPhotos() {
         photoUris.clear()
-
         try {
             val data = JSONArray(prefs.getString("photos", "[]"))
-
-            for (i in 0 until data.length()) {
-                photoUris.add(data.getString(i))
-            }
-        } catch (_: Exception) {
-            photoUris.clear()
-        }
+            for (i in 0 until data.length()) photoUris.add(data.getString(i))
+        } catch (_: Exception) { photoUris.clear() }
     }
 
     private fun savePhotos() {
         val array = JSONArray()
+        photoUris.forEach { array.put(it) }
+        prefs.edit().putString("photos", array.toString()).apply()
+    }
 
-        photoUris.forEach {
-            array.put(it)
-        }
-
-        prefs.edit()
-            .putString("photos", array.toString())
-            .apply()
-            
-    // 일기 데이터 불러오기
     private fun loadEntries() {
         entries.clear()
         try {
             val data = JSONArray(prefs.getString("entries", "[]"))
             for (i in 0 until data.length()) {
                 val item = data.getJSONObject(i)
-                entries.add(
-                    DiaryEntry(
-                        item.optLong("id"),
-                        item.optString("date"),
-                        item.optString("title"),
-                        item.optString("body")
-                    )
-                )
+                entries.add(DiaryEntry(item.optLong("id"), item.optString("date"),
+                    item.optString("title"), item.optString("body")))
             }
             entries.sortByDescending { it.id }
-        } catch (_: Exception) {
-            entries.clear()
-        }
+        } catch (_: Exception) { entries.clear() }
     }
 
-    // 일기 데이터 저장
     private fun persistEntries() {
         val data = JSONArray()
-        entries.forEach { entry ->
+        entries.forEach { item ->
             data.put(JSONObject().apply {
-                put("id", entry.id)
-                put("date", entry.date)
-                put("title", entry.title)
-                put("body", entry.body)
+                put("id", item.id); put("date", item.date)
+                put("title", item.title); put("body", item.body)
             })
         }
         prefs.edit().putString("entries", data.toString()).apply()
     }
 
-    private fun today(): String =
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
-
+    private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
     private fun rounded(color: Int, radius: Int): GradientDrawable =
-        GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = dp(radius).toFloat()
-        }
+        GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
 
-    private fun diaryStreakMessage(): String {
-        if (entries.isEmpty()) return "오늘의 기록을 시작해 보세요."
-        return "오늘도 소중한 하루를 기록해 보세요."
-    }
+    private fun diaryStreakMessage(): String =
+        if (entries.isEmpty()) "오늘의 기록을 시작해 보세요." else "오늘도 소중한 하루를 기록해 보세요."
 
     private fun showHistory() {
         currentMode = 0
         showScreen()
         content.removeAllViews()
-
-        content.addView(TextView(this).apply {
-            text = "기록 보기"
-            textSize = 23f
-            setTextColor(ink)
-        })
-
-        entries.forEach { entry ->
+        content.addView(TextView(this).apply { text = "기록 보기"; textSize = 23f; setTextColor(ink) })
+        entries.forEach { item ->
             content.addView(TextView(this).apply {
-                text = "${entry.date}\n${entry.title}\n${entry.body.take(100)}"
+                text = "${item.date}\n${item.title}\n${item.body.take(100)}"
                 textSize = 15f
                 setTextColor(ink)
                 setPadding(dp(16), dp(14), dp(16), dp(14))
                 background = rounded(paper, 10)
-                setOnClickListener { buildDiary(content, entry) }
-            }, LinearLayout.LayoutParams(-1, -2).apply {
-                setMargins(0, 0, 0, dp(10))
-            })
-        }
-    }
-
-    private fun loadWeatherForCurrentLocation() {
-        if (::diaryWeatherText.isInitialized) {
-            diaryWeatherText.text = "📍 지역·날씨 확인 중"
+                setOnClickListener { buildDiary(content, item) }
+            }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, dp(10)) })
         }
     }
 
     private fun showBackupRestoreDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("데이터 백업 · 복원")
+        AlertDialog.Builder(this).setTitle("데이터 백업 · 복원")
             .setMessage("일기와 사진을 백업하거나 복원합니다.")
             .setPositiveButton("백업하기") { _, _ ->
-                startActivityForResult(
-                    Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "application/zip"
-                        putExtra(Intent.EXTRA_TITLE, "DAYFLOW_Diary_Backup.zip")
-                    },
-                    BACKUP_CREATE_REQUEST
-                )
+                startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "application/zip"
+                    putExtra(Intent.EXTRA_TITLE, "DAYFLOW_Diary_Backup.zip")
+                }, BACKUP_CREATE_REQUEST)
             }
             .setNegativeButton("복원하기") { _, _ ->
-                startActivityForResult(
-                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "application/zip"
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    },
-                    BACKUP_RESTORE_REQUEST
-                )
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "application/zip"
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }, BACKUP_RESTORE_REQUEST)
             }
-            .setNeutralButton("취소", null)
-            .show()
+            .setNeutralButton("취소", null).show()
     }
 
     private fun createDiaryBackup(uri: Uri) {
@@ -1501,19 +803,15 @@ class MainActivity : Activity() {
             contentResolver.openOutputStream(uri)?.use { output ->
                 ZipOutputStream(output).use { zip ->
                     val data = JSONArray()
-                    entries.forEach { entry ->
+                    entries.forEach { item ->
                         data.put(JSONObject().apply {
-                            put("id", entry.id)
-                            put("date", entry.date)
-                            put("title", entry.title)
-                            put("body", entry.body)
+                            put("id", item.id); put("date", item.date)
+                            put("title", item.title); put("body", item.body)
                         })
                     }
-
                     zip.putNextEntry(ZipEntry("entries.json"))
                     zip.write(data.toString().toByteArray(Charsets.UTF_8))
                     zip.closeEntry()
-
                     val folder = java.io.File(filesDir, "diary_photos")
                     folder.listFiles()?.filter { it.isFile }?.forEach { file ->
                         zip.putNextEntry(ZipEntry("photos/${file.name}"))
@@ -1522,7 +820,6 @@ class MainActivity : Activity() {
                     }
                 }
             } ?: throw Exception("백업 파일을 열 수 없습니다.")
-
             Toast.makeText(this, "백업 완료", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(this, "백업 실패: ${e.message}", Toast.LENGTH_LONG).show()
@@ -1533,10 +830,8 @@ class MainActivity : Activity() {
         try {
             val folder = java.io.File(filesDir, "diary_photos")
             if (!folder.exists()) folder.mkdirs()
-
             val importedEntries = mutableListOf<DiaryEntry>()
             val importedPhotos = mutableListOf<String>()
-
             contentResolver.openInputStream(uri)?.use { input ->
                 ZipInputStream(input).use { zip ->
                     var item = zip.nextEntry
@@ -1546,30 +841,18 @@ class MainActivity : Activity() {
                                 val bytes = ByteArrayOutputStream()
                                 zip.copyTo(bytes)
                                 val array = JSONArray(bytes.toString("UTF-8"))
-
                                 for (i in 0 until array.length()) {
                                     val obj = array.getJSONObject(i)
-                                    importedEntries.add(
-                                        DiaryEntry(
-                                            obj.optLong("id"),
-                                            obj.optString("date"),
-                                            obj.optString("title"),
-                                            obj.optString("body")
-                                        )
-                                    )
+                                    importedEntries.add(DiaryEntry(obj.optLong("id"),
+                                        obj.optString("date"), obj.optString("title"), obj.optString("body")))
                                 }
                             }
-
-                            item.name.startsWith("photos/") &&
-                                !item.isDirectory -> {
+                            item.name.startsWith("photos/") && !item.isDirectory -> {
                                 val name = item.name.substringAfterLast("/")
                                     .replace(Regex("[^A-Za-z0-9._-]"), "_")
                                 val file = java.io.File(folder, name)
                                 file.outputStream().use { zip.copyTo(it) }
-
-                                if (file.length() > 0L) {
-                                    importedPhotos.add(Uri.fromFile(file).toString())
-                                }
+                                if (file.length() > 0L) importedPhotos.add(Uri.fromFile(file).toString())
                             }
                         }
                         zip.closeEntry()
@@ -1578,28 +861,20 @@ class MainActivity : Activity() {
                 }
             } ?: throw Exception("백업 파일을 읽을 수 없습니다.")
 
-            // 기존 기록을 유지하며 가져온 기록을 병합
-            val merged = (entries + importedEntries)
-                .associateBy { it.id }
-                .values
-                .sortedByDescending { it.id }
-
+            // 기존 데이터는 유지하고 백업 데이터만 ID 기준으로 합칩니다.
+            val merged = (entries + importedEntries).associateBy { it.id }.values.sortedByDescending { it.id }
             entries.clear()
             entries.addAll(merged)
             persistEntries()
-
             photoUris.addAll(importedPhotos)
-            val uniquePhotos = photoUris.distinct()
+            val unique = photoUris.distinct()
             photoUris.clear()
-            photoUris.addAll(uniquePhotos)
+            photoUris.addAll(unique)
             savePhotos()
-
             showScreen()
             Toast.makeText(this, "복원 완료", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(this, "복원 실패: ${e.message}", Toast.LENGTH_LONG).show()
         }
-    }
-
     }
 }
