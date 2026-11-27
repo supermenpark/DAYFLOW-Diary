@@ -1203,12 +1203,84 @@ class MainActivity : Activity() {
                 ) {
                     val savedUri = Uri.fromFile(destination).toString()
 
+
+    @Deprecated("Deprecated in Android")
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?
+    ) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (resultCode != RESULT_OK || data == null) return
+
+        when (requestCode) {
+            BACKUP_CREATE_REQUEST -> {
+                data.data?.let { createDiaryBackup(it) }
+                return
+            }
+
+            BACKUP_RESTORE_REQUEST -> {
+                data.data?.let { restoreDiaryBackup(it) }
+                return
+            }
+
+            PHOTO_PICK_REQUEST -> {
+                // 사진 선택 처리
+            }
+
+            else -> return
+        }
+
+        val picked = mutableListOf<Uri>()
+
+        data.clipData?.let { clip ->
+            for (i in 0 until clip.itemCount) {
+                picked.add(clip.getItemAt(i).uri)
+            }
+        }
+
+        if (picked.isEmpty()) {
+            data.data?.let { picked.add(it) }
+        }
+
+        var added = 0
+
+        picked.forEach { photoUri ->
+            try {
+                val folder = java.io.File(filesDir, "diary_photos")
+
+                if (!folder.exists()) folder.mkdirs()
+
+                val extension = when (
+                    contentResolver.getType(photoUri)?.lowercase(Locale.ROOT)
+                ) {
+                    "image/png" -> ".png"
+                    "image/webp" -> ".webp"
+                    "image/gif" -> ".gif"
+                    else -> ".jpg"
+                }
+
+                val destination = java.io.File(
+                    folder,
+                    "photo_${System.currentTimeMillis()}_${Random.nextInt(100000)}$extension"
+                )
+
+                val copied = contentResolver.openInputStream(photoUri)?.use { input ->
+                    destination.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                    true
+                } ?: false
+
+                if (copied && destination.exists() && destination.length() > 0L) {
+                    val savedUri = Uri.fromFile(destination).toString()
+
                     if (!photoUris.contains(savedUri)) {
                         photoUris.add(0, savedUri)
                         added++
                     }
                 }
-
             } catch (_: Exception) {
                 // 읽을 수 없는 사진은 건너뜀
             }
@@ -1224,6 +1296,7 @@ class MainActivity : Activity() {
             Toast.LENGTH_SHORT
         ).show()
     }
+
 
     // 사진 선택 상태 전환
     private fun togglePhotoSelection(uriString: String) {
