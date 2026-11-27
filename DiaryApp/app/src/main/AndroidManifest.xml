@@ -5,6 +5,7 @@
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <application
+        android:icon="@drawable/dayflow_launcher"
         android:allowBackup="true"
         android:label="DAYFLOW Diary"
         android:supportsRtl="true"
